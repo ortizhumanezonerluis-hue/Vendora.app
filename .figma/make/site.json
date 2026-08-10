@@ -1,0 +1,10 @@
+{
+  "description": "Manage inventory and point-of-sale operations efficiently with a user-friendly interface designed for businesses, enhancing productivity and accuracy.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
