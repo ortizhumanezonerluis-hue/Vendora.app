@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import MainLayout from '../components/layout/MainLayout'
 import { cashService } from '../services/cashService'
 import { ArqueoCaja } from '../types'
