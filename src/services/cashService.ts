@@ -218,12 +218,18 @@ export const cashService = {
     const start = session.fecha_apertura
     const end = session.fecha_cierre || new Date().toISOString()
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('ventas')
       .select(`*, detalles_venta(*, productos(*))`)
+      .eq('usuario_id', session.usuario_id)
       .gte('fecha', start)
       .lte('fecha', end)
-      .order('fecha', { ascending: false })
+      
+    if (session.negocio_id) {
+      query = query.eq('negocio_id', session.negocio_id)
+    }
+
+    const { data, error } = await query.order('fecha', { ascending: false })
 
     if (error) throw error
     return data || []

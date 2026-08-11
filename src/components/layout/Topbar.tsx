@@ -243,8 +243,8 @@ export default function Topbar({ title }: TopbarProps) {
             />
           </div>
 
-          {/* Scanner Pairing Button — opens QR modal, visible to admin only */}
-          {profile?.rol === 'admin' && profile?.negocio_id && (
+          {/* Scanner Pairing Button — opens QR modal, visible to all authenticated roles */}
+          {profile?.negocio_id && (
             <button
               onClick={() => setShowScannerModal(true)}
               title="Conectar escáner móvil"

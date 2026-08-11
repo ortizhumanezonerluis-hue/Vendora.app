@@ -8,6 +8,7 @@ import { toast } from '../components/ui/Toaster'
 import { useRemoteScanner } from '../hooks/useRemoteScanner'
 import { useNavigate } from 'react-router-dom'
 import { SkeletonPage } from '../components/ui/Skeleton'
+import { cashService } from '../services/cashService'
 import {
   Search,
   Plus,
@@ -88,8 +89,23 @@ export default function POSPage() {
 
   const processPayment = async () => {
     if (processing) return // prevent double submission
-    const dbPaymentMethod = payMethod === 'cash' ? 'efectivo' : payMethod === 'card' ? 'tarjeta' : 'transferencia'
+    
+    // Enforce register check: check if cashier actually has an active session open
     setProcessing(true)
+    try {
+      const active = await cashService.getActiveSession(userName, profile?.negocio_id)
+      if (!active) {
+        toast('Debes abrir tu turno de caja antes de realizar ventas', { type: 'error' })
+        setProcessing(false)
+        setCheckoutState('idle')
+        navigate('/caja')
+        return
+      }
+    } catch (err) {
+      console.warn('Register verification check bypassed/failed:', err)
+    }
+
+    const dbPaymentMethod = payMethod === 'cash' ? 'efectivo' : payMethod === 'card' ? 'tarjeta' : 'transferencia'
     setCheckoutState('paying')
     const result = await checkout(dbPaymentMethod, userName, profile?.negocio_id)
     if (result) {

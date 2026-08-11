@@ -31,6 +31,61 @@ export default function CashHistoryPage() {
   const [retroCash, setRetroCash] = useState('')
   const [retroSaving, setRetroSaving] = useState(false)
 
+  // Filter states
+  const [selectedCashier, setSelectedCashier] = useState<string>('all')
+  const [dateRangeFilter, setDateRangeFilter] = useState<string>('all') // 'all', '7', '15', '30', '60', 'custom'
+  const [customStartDate, setCustomStartDate] = useState<string>('')
+  const [customEndDate, setCustomEndDate] = useState<string>('')
+
+  // Unique list of cashiers for filter select (computed from sessions)
+  const cashiers = useMemo(() => {
+    const names = new Set<string>()
+    sessions.forEach(s => {
+      if (s.usuario_id) names.add(s.usuario_id)
+    })
+    return Array.from(names)
+  }, [sessions])
+
+  // Filtered session list
+  const filteredSessions = useMemo(() => {
+    return sessions.filter(session => {
+      // 1. Cashier Filter
+      if (selectedCashier !== 'all' && session.usuario_id !== selectedCashier) {
+        return false
+      }
+
+      // 2. Date Range Filter
+      if (dateRangeFilter !== 'all') {
+        const sessionDate = new Date(session.fecha_apertura)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+
+        if (dateRangeFilter === 'custom') {
+          if (customStartDate) {
+            const start = new Date(customStartDate)
+            start.setHours(0, 0, 0, 0)
+            if (sessionDate < start) return false
+          }
+          if (customEndDate) {
+            const end = new Date(customEndDate)
+            end.setHours(23, 59, 59, 999)
+            if (sessionDate > end) return false
+          }
+        } else {
+          const days = parseInt(dateRangeFilter)
+          if (!isNaN(days)) {
+            const limitDate = new Date()
+            limitDate.setDate(limitDate.getDate() - days)
+            limitDate.setHours(0, 0, 0, 0)
+            if (sessionDate < limitDate) return false
+          }
+        }
+      }
+
+      return true
+    })
+  }, [sessions, selectedCashier, dateRangeFilter, customStartDate, customEndDate])
+
   useEffect(() => {
     loadHistory()
   }, [profile])
@@ -125,12 +180,72 @@ export default function CashHistoryPage() {
     <MainLayout title="Historial de Cajas y Turnos">
       <div className="flex h-[calc(100vh-52px)] overflow-hidden">
         
-        {/* LEFT: Session list */}
+        {/* LEFT: Session list and Filters */}
         <div className="w-80 shrink-0 border-r border-gray-100 flex flex-col overflow-hidden">
-          <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between">
-            <div>
-              <p className="text-[13px] font-semibold text-gray-900">Turnos de Caja</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">{sessions.length} sesiones registradas</p>
+          <div className="px-4 py-3.5 border-b border-gray-100 space-y-3 shrink-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[13px] font-semibold text-gray-900">Turnos de Caja</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">{filteredSessions.length} de {sessions.length} filtrados</p>
+              </div>
+            </div>
+
+            {/* Filter Controls (Premium style) */}
+            <div className="space-y-2">
+              {profile?.rol === 'admin' && (
+                <div>
+                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Filtrar Cajero</label>
+                  <select
+                    value={selectedCashier}
+                    onChange={(e) => setSelectedCashier(e.target.value)}
+                    className="w-full h-8 px-2.5 mt-0.5 text-[12px] bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-gray-700 focus:outline-none transition-colors"
+                  >
+                    <option value="all">Todos los cajeros</option>
+                    {cashiers.map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Intervalo de Tiempo</label>
+                <select
+                  value={dateRangeFilter}
+                  onChange={(e) => setDateRangeFilter(e.target.value)}
+                  className="w-full h-8 px-2.5 mt-0.5 text-[12px] bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-gray-700 focus:outline-none transition-colors"
+                >
+                  <option value="all">Todos los registros</option>
+                  <option value="7">Últimos 7 días</option>
+                  <option value="15">Últimos 15 días</option>
+                  <option value="30">Últimos 30 días</option>
+                  <option value="60">Últimos 60 días</option>
+                  <option value="custom">Rango personalizado...</option>
+                </select>
+              </div>
+
+              {dateRangeFilter === 'custom' && (
+                <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div>
+                    <label className="text-[8px] font-semibold text-gray-400 block">Inicio</label>
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="w-full h-7 px-2 text-[10px] bg-gray-50 border border-gray-200 rounded-md focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[8px] font-semibold text-gray-400 block">Fin</label>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="w-full h-7 px-2 text-[10px] bg-gray-50 border border-gray-200 rounded-md focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -141,13 +256,13 @@ export default function CashHistoryPage() {
           )}
 
           <div className="flex-1 overflow-y-auto">
-            {sessions.length === 0 ? (
+            {filteredSessions.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center">
                 <Wallet size={24} className="text-gray-200 mb-2" />
-                <p className="text-[12px] text-gray-400">Sin historial de cajas</p>
+                <p className="text-[12px] text-gray-400">Sin historial para los filtros aplicados</p>
               </div>
             ) : (
-              sessions.map((session) => {
+              filteredSessions.map((session) => {
                 const isSelected = selectedSession?.id === session.id
                 const isAuto = (session as any).auto_cerrado
                 const dateLabel = new Date(session.fecha_apertura).toLocaleDateString('es-CO', {

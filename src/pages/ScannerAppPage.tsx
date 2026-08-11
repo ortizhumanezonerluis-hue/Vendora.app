@@ -77,14 +77,24 @@ export default function ScannerAppPage() {
         scannerRef.current = html5QrCode
 
         await html5QrCode.start(
-          cameraId,
+          { deviceId: cameraId },
           {
-            fps: 12,
+            fps: 20,
             qrbox: (width, height) => {
               const size = Math.min(width, height) * 0.7
-              return { width: size, height: size * 0.5 } // Rectangular guide for barcodes
+              return { width: size, height: size * 0.45 }
             },
-            aspectRatio: 1.7777778
+            // Advanced constraints to enforce macro focus and continuous autofocus on mobile devices
+            videoConstraints: {
+              deviceId: cameraId,
+              width: { min: 640, ideal: 1280, max: 1920 },
+              height: { min: 480, ideal: 720, max: 1080 },
+              facingMode: 'environment',
+              // @ts-ignore
+              focusMode: { ideal: 'continuous' },
+              // @ts-ignore
+              advanced: [{ focusMode: 'continuous' }, { zoom: 1.0 }]
+            }
           },
           async (decodedText) => {
             const now = Date.now()
@@ -151,7 +161,7 @@ export default function ScannerAppPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans select-none max-w-md mx-auto relative overflow-hidden">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 py-3 shrink-0 flex items-center justify-between">
+      <header className="bg-white px-4 py-3 shrink-0 flex items-center justify-between border-b border-gray-150">
         <Link to="/" className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
           <ArrowLeft size={16} />
         </Link>
@@ -160,24 +170,23 @@ export default function ScannerAppPage() {
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
             <span className="text-[12px] font-bold text-gray-800 tracking-tight">Escáner Móvil Activo</span>
           </div>
-          {!profile && (
-            <span className="text-[10px] text-gray-400 mt-0.5">Modo sin sesión · ID: {resolvedNegocioId?.slice(0,8)}…</span>
-          )}
-          {profile && (
-            <span className="text-[10px] text-gray-400 mt-0.5">{profile.nombre} · {profile.negocio_id?.slice(0,8)}…</span>
+          {!profile ? (
+            <span className="text-[10px] text-gray-400 mt-0.5">Modo sin sesión · ID: {resolvedNegocioId?.slice(0, 8)}...</span>
+          ) : (
+            <span className="text-[10px] text-gray-400 mt-0.5">{profile.nombre} · {profile.negocio_id?.slice(0, 8)}...</span>
           )}
         </div>
         <div className="w-7 h-7" />
       </header>
 
       {/* Switch Mode Controls */}
-      <div className="p-4 shrink-0 bg-white border-b border-gray-100 flex gap-2">
+      <div className="px-4 py-3 shrink-0 bg-white border-b border-gray-100 flex gap-2 justify-center">
         <button
           onClick={() => setScanMode('form')}
           className={[
-            'flex-1 py-2 px-3 rounded-xl text-[12px] font-semibold transition-all border flex items-center justify-center gap-1.5',
+            'px-4 py-2 rounded-lg text-[12px] font-semibold transition-all border flex items-center gap-1.5',
             scanMode === 'form'
-              ? 'bg-purple-50 border-purple-200 text-purple-700 shadow-sm font-bold'
+              ? 'bg-purple-50 border-purple-200 text-purple-700 font-bold'
               : 'bg-white border-gray-200 text-gray-500'
           ].join(' ')}
         >
@@ -188,9 +197,9 @@ export default function ScannerAppPage() {
         <button
           onClick={() => setScanMode('continuous')}
           className={[
-            'flex-1 py-2 px-3 rounded-xl text-[12px] font-semibold transition-all border flex items-center justify-center gap-1.5',
+            'px-4 py-2 rounded-lg text-[12px] font-semibold transition-all border flex items-center gap-1.5',
             scanMode === 'continuous'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm font-bold'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold'
               : 'bg-white border-gray-200 text-gray-500'
           ].join(' ')}
         >
@@ -200,17 +209,23 @@ export default function ScannerAppPage() {
       </div>
 
       {/* Camera Viewer Screen */}
-      <div className="flex-1 flex flex-col justify-center p-5 items-center relative">
-        <div className="w-full max-w-xs aspect-[4/3] rounded-2xl overflow-hidden border border-gray-200 bg-black relative shadow-lg">
+      <div className="flex-1 flex flex-col justify-center p-6 items-center relative bg-gray-50">
+        <div className="w-full aspect-[4/5] rounded-3xl overflow-hidden border border-gray-200/50 bg-black relative shadow-xl">
           
           {/* Guide Overlay for camera */}
           <div id="camera-reader-view" className="w-full h-full relative" />
 
-          {/* Guide reticle */}
+          {/* Guide reticle matching Image 2 perfectly */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-            <div className="w-[75%] h-[40%] border-2 border-dashed border-white/60 rounded-xl relative flex items-center justify-center">
+            <div className="w-[70%] aspect-[1.3] relative">
+              {/* White corners overlay */}
+              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-md" />
+              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-md" />
+              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-md" />
+              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-md" />
+              
               {/* Scanline Animation */}
-              <div className="absolute left-0 right-0 h-0.5 bg-red-500 shadow-[0_0_8px_#ef4444] animate-[bounce_2s_infinite]" />
+              <div className="absolute left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_8px_#ef4444] top-1/2 -translate-y-1/2 animate-[pulse_1.5s_infinite]" />
             </div>
           </div>
         </div>
@@ -239,7 +254,7 @@ export default function ScannerAppPage() {
         </div>
         <div className="h-10 flex items-center justify-center">
           {lastScanned ? (
-            <div className="bg-gray-155 text-gray-900 px-4 py-1.5 rounded-full font-mono text-[13px] font-bold flex items-center gap-1.5">
+            <div className="bg-gray-100 text-gray-900 px-4 py-1.5 rounded-full font-mono text-[13px] font-bold flex items-center gap-1.5 border border-gray-200">
               <Sparkles size={12} className="text-amber-500" />
               {lastScanned}
             </div>
