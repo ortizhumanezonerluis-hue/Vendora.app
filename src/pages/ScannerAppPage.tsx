@@ -12,7 +12,7 @@ import { Link, useSearchParams } from 'react-router-dom'
  * The library IDs child elements as: {id}__scan_region, {id}__dashboard, {id}__filescan_input
  */
 const SCANNER_CSS = `
-  /* Make the container fill the screen */
+  /* Make the container and all direct children fill the screen */
   #camera-reader-view {
     position: absolute !important;
     inset: 0 !important;
@@ -20,6 +20,7 @@ const SCANNER_CSS = `
     height: 100% !important;
     background: transparent !important;
     border: none !important;
+    overflow: hidden !important;
   }
   /* Stretch the video to cover the full screen */
   #camera-reader-view video {
@@ -30,14 +31,25 @@ const SCANNER_CSS = `
     object-fit: cover !important;
     border: none !important;
     background: #000 !important;
+    z-index: 0 !important;
   }
-  /* Hide the library's own scan region, dashboard, and shading overlays */
+  /*
+   * Nuke every UI element the html5-qrcode library injects:
+   * - __scan_region  (the shaded scan box + its big corner brackets)
+   * - __dashboard    (file/camera toggle buttons)
+   * - .qr-shaded-region  (the dark overlay divs around the scan box)
+   * - img            (any QR sample image)
+   */
   #camera-reader-view__scan_region,
   #camera-reader-view__dashboard,
   #camera-reader-view__dashboard_section,
   #camera-reader-view__filescan_input,
+  #camera-reader-view .qr-shaded-region,
   #camera-reader-view img {
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
   }
 `
 
@@ -99,11 +111,9 @@ export default function ScannerAppPage() {
           { deviceId: cameraId },
           {
             fps: 20,
-            // qrbox set to 0 disables the library's own shaded scan region UI
-            qrbox: (width, height) => ({
-              width: Math.round(width * 0.72),
-              height: Math.round(height * 0.38)
-            }),
+            // No qrbox — we draw our own reticle overlay; omitting this
+            // prevents the library from rendering its own scan-region UI
+            // (the large gray corner brackets visible in the screenshot).
             videoConstraints: {
               deviceId: cameraId,
               width: { min: 640, ideal: 1280, max: 1920 },
