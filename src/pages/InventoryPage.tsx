@@ -10,6 +10,7 @@ import { toast } from '../components/ui/Toaster'
 import { SkeletonPage } from '../components/ui/Skeleton'
 import { Select } from '../components/ui/Select'
 import { useRemoteScanner } from '../hooks/useRemoteScanner'
+import { smartLookupBarcode, indexProductBackground } from '../services/smartProductLookup'
 import {
   Search,
   Plus,
@@ -53,11 +54,29 @@ export default function InventoryPage() {
   const isAdmin = profile?.rol === 'admin'
 
   // Capture remote scans for autofilling product creation forms
-  useRemoteScanner(profile?.negocio_id, profile?.id, (code, mode) => {
+  useRemoteScanner(profile?.negocio_id, profile?.id, async (code, mode) => {
     if (mode === 'form') {
       setNewProdSku(code)
       setShowAddModal(true)
       toast(`Código cargado desde celular: ${code}`, { type: 'success' })
+      
+      // Query 3-tier smart catalog cascade
+      try {
+        const result = await smartLookupBarcode(code)
+        if (result) {
+          setNewProdName(result.name)
+          setNewProdCategory(result.category)
+          setNewProdIva(String(result.default_iva))
+          toast('🟢 Producto identificado automáticamente', { type: 'success' })
+          // Shift focus to price cost input field after a small delay for render
+          setTimeout(() => {
+            const costEl = document.getElementById('new-prod-cost')
+            if (costEl) (costEl as HTMLInputElement).focus()
+          }, 200)
+        }
+      } catch (err) {
+        console.warn('Smart lookup failed:', err)
+      }
     }
   })
 
@@ -89,7 +108,22 @@ export default function InventoryPage() {
     if (location.state && (location.state as any).autoOpenAddModal) {
       const stateObj = location.state as any
       if (stateObj.autoFillSku) {
-        setNewProdSku(stateObj.autoFillSku)
+        const code = stateObj.autoFillSku
+        setNewProdSku(code)
+        
+        // Query 3-tier smart catalog cascade
+        smartLookupBarcode(code).then(result => {
+          if (result) {
+            setNewProdName(result.name)
+            setNewProdCategory(result.category)
+            setNewProdIva(String(result.default_iva))
+            toast('🟢 Producto identificado automáticamente', { type: 'success' })
+            setTimeout(() => {
+              const costEl = document.getElementById('new-prod-cost')
+              if (costEl) (costEl as HTMLInputElement).focus()
+            }, 250)
+          }
+        }).catch(err => console.warn('Missing scan lookup failed:', err))
       }
       setShowAddModal(true)
       // Clear location state window token
@@ -185,6 +219,14 @@ export default function InventoryPage() {
 
     if (res) {
       toast('Producto guardado correctamente en el catálogo', { type: 'success' })
+      
+      // Auto-learn/Save manually added product to global shared master_catalog in background
+      indexProductBackground({
+        barcode: newProdSku,
+        name: newProdName,
+        category: newProdCategory,
+        default_iva: parseFloat(newProdIva) || 19.00
+      })
     }
 
     setShowAddModal(false)
@@ -634,6 +676,7 @@ export default function InventoryPage() {
                 <div>
                   <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide block mb-1">Costo ($)</label>
                   <input
+                    id="new-prod-cost"
                     type="number"
                     step="0.01"
                     value={newProdCost}
