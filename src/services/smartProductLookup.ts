@@ -79,21 +79,69 @@ export async function smartLookupBarcode(barcode: string): Promise<SmartProduct 
     console.warn('[smartLookup] Error en consulta Capa 2:', err)
   }
 
-  // --- CAPA 3: Supabase Edge Scraper ---
+  // --- CAPA 3: Supabase Edge Scraper o Scraping Directo Cliente ---
   try {
     console.log(`[smartLookup] Capa 3 Querying Edge Scraper for (${cleanBarcode})...`)
-    // Call our Edge Function
-    const { data: edgeData, error: edgeError } = await supabase.functions.invoke('scrape-product', {
-      method: 'GET',
-      queryParams: { barcode: cleanBarcode }
-    })
+    
+    let scraperResult = null
 
-    if (!edgeError && edgeData && edgeData.found) {
-      const name = edgeData.name || 'Producto Nuevo'
-      const brand = edgeData.brand || ''
-      const category = normalizeCategory(edgeData.category)
+    try {
+      // Intento 1: Supabase Edge Function si está desplegada
+      const { data: edgeData, error: edgeError } = await supabase.functions.invoke('scrape-product', {
+        method: 'GET',
+        queryParams: { barcode: cleanBarcode }
+      })
+      if (!edgeError && edgeData && edgeData.found) {
+        scraperResult = edgeData
+      }
+    } catch (_) {
+      // Si falla o no está desplegada, hacemos scraping directo desde el cliente
+    }
+
+    // Intento 2: Scraping directo de Éxito API (VTEX) desde cliente
+    if (!scraperResult) {
+      const exitoApiUrl = `https://www.exito.com/api/catalog_system/pub/products/search?fq=alternateIds_Ean:${cleanBarcode}`
+      const res = await fetch(exitoApiUrl, { headers: { 'Accept': 'application/json' } })
+      if (res.ok) {
+        const products = await res.json()
+        if (Array.isArray(products) && products.length > 0) {
+          const item = products[0]
+          scraperResult = {
+            found: true,
+            name: item.productName || item.brand,
+            brand: item.brand || '',
+            category: item.categories?.[0]?.replace(/^\/|\/$/g, '').split('/')?.[0] || 'Abarrotes',
+            image_url: item.items?.[0]?.images?.[0]?.imageUrl || ''
+          }
+        }
+      }
+    }
+
+    // Intento 3: Scraping directo de Carulla API (VTEX) desde cliente
+    if (!scraperResult) {
+      const carullaApiUrl = `https://www.carulla.com/api/catalog_system/pub/products/search?fq=alternateIds_Ean:${cleanBarcode}`
+      const res = await fetch(carullaApiUrl, { headers: { 'Accept': 'application/json' } })
+      if (res.ok) {
+        const products = await res.json()
+        if (Array.isArray(products) && products.length > 0) {
+          const item = products[0]
+          scraperResult = {
+            found: true,
+            name: item.productName || item.brand,
+            brand: item.brand || '',
+            category: item.categories?.[0]?.replace(/^\/|\/$/g, '').split('/')?.[0] || 'Abarrotes',
+            image_url: item.items?.[0]?.images?.[0]?.imageUrl || ''
+          }
+        }
+      }
+    }
+
+    if (scraperResult && scraperResult.found) {
+      const name = scraperResult.name || 'Producto Nuevo'
+      const brand = scraperResult.brand || ''
+      const category = normalizeCategory(scraperResult.category)
       const iva = calculateDIANTax(name, category)
-      const imageUrl = edgeData.image_url || null
+      const imageUrl = scraperResult.image_url || null
 
       const result: SmartProduct = {
         barcode: cleanBarcode,
