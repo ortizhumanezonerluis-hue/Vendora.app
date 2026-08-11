@@ -86,76 +86,17 @@ export async function smartLookupBarcode(barcode: string): Promise<SmartProduct 
     let scraperResult = null
 
     try {
-      // Intento 1: Supabase Edge Function (Correct GET params wrapper)
-      const { data: edgeData, error: edgeError } = await supabase.functions.invoke('scrape-product', {
-        method: 'GET',
-        headers: {},
-        // Supabase-js sends query parameters correctly under query params in options
-        // or we append directly to the call. We can do both for maximum compatibility.
+      // LLAMADA EXCLUSIVA A TRAVÉS DEL PROXY DE SUPABASE (EDGE FUNCTION)
+      // Esto evita los bloqueos CORS porque la petición se realiza de servidor a servidor (Deno -> Exito/Carulla)
+      // y la Edge Function devuelve las cabeceras CORS correctas al navegador.
+      const { data: pathData, error: pathError } = await supabase.functions.invoke(`scrape-product?barcode=${cleanBarcode}`, {
+        method: 'GET'
       })
-      
-      // If direct invoke had parameters mismatch, query with URL path fallback
-      let resolvedData = edgeData
-      if (edgeError || !edgeData) {
-        const { data: pathData, error: pathError } = await supabase.functions.invoke(`scrape-product?barcode=${cleanBarcode}`, {
-          method: 'GET'
-        })
-        if (!pathError && pathData) {
-          resolvedData = pathData
-        }
-      }
-
-      if (resolvedData && resolvedData.found) {
-        scraperResult = resolvedData
+      if (!pathError && pathData && pathData.found) {
+        scraperResult = pathData
       }
     } catch (err) {
-      console.warn('[smartLookup] Edge Function invoke failed:', err)
-    }
-
-    // Intento 2: Scraping directo de Éxito API (VTEX) desde cliente
-    if (!scraperResult) {
-      try {
-        const exitoApiUrl = `https://www.exito.com/api/catalog_system/pub/products/search?fq=alternateIds_Ean:${cleanBarcode}`
-        const res = await fetch(exitoApiUrl, { headers: { 'Accept': 'application/json' } })
-        if (res.ok) {
-          const products = await res.json()
-          if (Array.isArray(products) && products.length > 0) {
-            const item = products[0]
-            scraperResult = {
-              found: true,
-              name: item.productName || item.brand,
-              brand: item.brand || '',
-              category: item.categories?.[0]?.replace(/^\/|\/$/g, '').split('/')?.[0] || 'Abarrotes',
-              image_url: item.items?.[0]?.images?.[0]?.imageUrl || ''
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('[smartLookup] Direct Exito scrape failed (likely CORS):', e)
-      }
-    }
-
-    // Intento 3: Scraping directo de Carulla API (VTEX) desde cliente
-    if (!scraperResult) {
-      try {
-        const carullaApiUrl = `https://www.carulla.com/api/catalog_system/pub/products/search?fq=alternateIds_Ean:${cleanBarcode}`
-        const res = await fetch(carullaApiUrl, { headers: { 'Accept': 'application/json' } })
-        if (res.ok) {
-          const products = await res.json()
-          if (Array.isArray(products) && products.length > 0) {
-            const item = products[0]
-            scraperResult = {
-              found: true,
-              name: item.productName || item.brand,
-              brand: item.brand || '',
-              category: item.categories?.[0]?.replace(/^\/|\/$/g, '').split('/')?.[0] || 'Abarrotes',
-              image_url: item.items?.[0]?.images?.[0]?.imageUrl || ''
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('[smartLookup] Direct Carulla scrape failed (likely CORS):', e)
-      }
+      console.warn('[smartLookup] Edge Function proxy call failed:', err)
     }
 
     if (scraperResult && scraperResult.found) {
