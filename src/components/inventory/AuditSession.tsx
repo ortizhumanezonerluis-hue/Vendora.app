@@ -71,92 +71,82 @@ function QuantityModal({ product, currentCount, onConfirm, onClose, source }: Qu
 
   return (
     <div
-      className="fixed inset-0 z-[200] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-xs overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-sm">
         {/* Header */}
-        <div className="flex items-start justify-between px-5 pt-5 pb-3">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 bg-gray-100 rounded-xl flex items-center justify-center shrink-0">
-              <Package size={16} className="text-gray-500" />
+        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center shrink-0">
+              <Package size={14} className="text-white" />
             </div>
             <div className="min-w-0">
-              <p className="text-[13px] font-bold text-gray-900 leading-snug">{product.nombre}</p>
-              <p className="text-[10px] font-mono text-gray-400 mt-0.5">{product.codigo_barras}</p>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className={[
-                  'text-[9px] font-semibold px-1.5 py-0.5 rounded-full',
-                  source === 'mobile' ? 'bg-purple-50 text-purple-600 border border-purple-100' : 'bg-blue-50 text-blue-600 border border-blue-100'
-                ].join(' ')}>
-                  {source === 'mobile' ? '📱 Móvil' : '⌨️ Escáner'}
-                </span>
-                <span className="text-[10px] text-gray-400">Stock sistema: <strong>{product.stock_actual}</strong></span>
-              </div>
+              <p className="text-[13px] font-bold text-gray-900 truncate">{product.nombre}</p>
+              <p className="text-[10px] font-mono text-gray-400">{product.codigo_barras} · Stock: {product.stock_actual}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+          <button
+            onClick={onClose}
+            className="ml-3 shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          >
             <X size={14} />
           </button>
         </div>
 
-        {/* Quantity input */}
-        <div className="px-5 pb-2">
-          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">¿Cuántas unidades contaste?</p>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => adjust(-10)}
-              className="w-9 h-9 flex items-center justify-center border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 font-bold text-[11px] transition-colors"
-            >-10</button>
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-[12px] font-semibold text-gray-500 text-center">¿Cuántas unidades contaste físicamente?</p>
+
+          {/* Big counter row */}
+          <div className="flex items-center justify-center gap-3">
             <button
               onClick={() => adjust(-1)}
-              className="w-9 h-9 flex items-center justify-center border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 font-bold text-[13px] transition-colors"
-            >-</button>
+              className="w-12 h-12 flex items-center justify-center bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-700 font-bold text-[22px] transition-colors active:scale-95"
+            >−</button>
+
             <input
               ref={inputRef}
               type="number"
               min={0}
               value={qty}
               onChange={(e) => setQty(e.target.value)}
-              className="flex-1 h-14 text-center text-[28px] font-bold font-mono text-gray-900 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-gray-900 transition-colors"
+              className="w-28 h-16 text-center text-[40px] font-bold font-mono text-gray-900 border-2 border-gray-200 rounded-2xl focus:outline-none focus:border-gray-900 transition-colors bg-gray-50 focus:bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
+
             <button
               onClick={() => adjust(1)}
-              className="w-9 h-9 flex items-center justify-center border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 font-bold text-[13px] transition-colors"
+              className="w-12 h-12 flex items-center justify-center bg-gray-900 hover:bg-gray-800 rounded-xl text-white font-bold text-[22px] transition-colors active:scale-95"
             >+</button>
-            <button
-              onClick={() => adjust(10)}
-              className="w-9 h-9 flex items-center justify-center border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 font-bold text-[11px] transition-colors"
-            >+10</button>
           </div>
-          {currentCount > 0 && (
-            <p className="text-[10px] text-gray-400 mt-1.5 text-center">
-              Conteo anterior: <strong>{currentCount}</strong> unidades
-            </p>
-          )}
-        </div>
 
-        {/* Quick presets */}
-        <div className="px-5 pb-4">
-          <p className="text-[10px] text-gray-400 mb-1.5">Acceso rápido:</p>
-          <div className="flex gap-1.5 flex-wrap">
+          {/* Quick presets */}
+          <div className="flex items-center justify-center gap-2">
             {[1, 6, 12, 24, 48].map(n => (
               <button
                 key={n}
                 onClick={() => setQty(String(n))}
                 className={[
-                  'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors',
-                  numVal === n ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  'w-10 h-9 rounded-lg text-[12px] font-semibold border transition-colors',
+                  numVal === n
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
                 ].join(' ')}
               >
                 {n}
               </button>
             ))}
           </div>
+
+          {currentCount > 0 && (
+            <p className="text-center text-[11px] text-gray-400">
+              Valor anterior: <span className="font-semibold text-gray-600">{currentCount} uds</span>
+            </p>
+          )}
         </div>
 
-        {/* Actions */}
-        <div className="px-5 pb-5 flex gap-2">
+        {/* Footer */}
+        <div className="px-6 pb-5 flex gap-2">
           <button
             onClick={onClose}
             className="flex-1 h-10 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
@@ -168,8 +158,8 @@ function QuantityModal({ product, currentCount, onConfirm, onClose, source }: Qu
             disabled={isNaN(numVal) || numVal < 0}
             className="flex-1 h-10 bg-gray-900 hover:bg-gray-800 rounded-xl text-[13px] font-semibold text-white flex items-center justify-center gap-1.5 transition-colors disabled:opacity-40"
           >
-            <Check size={14} />
-            Guardar {numVal > 0 ? `(${numVal} uds)` : ''}
+            <Check size={13} />
+            Guardar {numVal > 0 ? `· ${numVal} uds` : ''}
           </button>
         </div>
       </div>
