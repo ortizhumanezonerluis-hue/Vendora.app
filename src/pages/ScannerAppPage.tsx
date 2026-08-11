@@ -47,6 +47,7 @@ export default function ScannerAppPage() {
   const [scanMode, setScanMode] = useState<'form' | 'continuous'>('form')
   const [lastScanned, setLastScanned] = useState<string | null>(null)
   const [cameraPermission, setCameraPermission] = useState<boolean | null>(null)
+  const [scanSuccess, setScanSuccess] = useState(false) // flashes corners green on each decode
 
   const resolvedNegocioId = searchParams.get('negocio_id') || profile?.negocio_id
   const resolvedUserId = profile?.id || 'anon_scanner_device'
@@ -123,6 +124,10 @@ export default function ScannerAppPage() {
               setLastScanned(decodedText)
               triggerBeepAndVibrate()
 
+              // Flash corners green for 1.2s
+              setScanSuccess(true)
+              setTimeout(() => setScanSuccess(false), 1200)
+
               try {
                 await sendRemoteScan(resolvedNegocioId, resolvedUserId, decodedText, scanMode)
                 toast(`Código emitido: ${decodedText}`, { type: 'success' })
@@ -185,13 +190,21 @@ export default function ScannerAppPage() {
         {/* Scan zone — transparent window punched through the overlay via box-shadow */}
         <div
           className="relative w-72 h-44 z-10 rounded-lg"
-          style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.42)' }}
+          style={{ boxShadow: `0 0 0 9999px rgba(0,0,0,${scanSuccess ? '0.35' : '0.45'})` }}
         >
-          {/* ── Corner brackets only, NO red lines, NO animations ── */}
-          <div className="absolute top-0 left-0 w-9 h-9 border-t-4 border-l-4 border-white rounded-tl-lg" />
-          <div className="absolute top-0 right-0 w-9 h-9 border-t-4 border-r-4 border-white rounded-tr-lg" />
-          <div className="absolute bottom-0 left-0 w-9 h-9 border-b-4 border-l-4 border-white rounded-bl-lg" />
-          <div className="absolute bottom-0 right-0 w-9 h-9 border-b-4 border-r-4 border-white rounded-br-lg" />
+          {/* ── Corner brackets — turn emerald on success ── */}
+          {(() => {
+            const color = scanSuccess ? 'border-emerald-400' : 'border-white'
+            const base = 'absolute w-9 h-9 border-4 transition-colors duration-200'
+            return (
+              <>
+                <div className={`${base} top-0 left-0 border-r-0 border-b-0 rounded-tl-lg ${color}`} />
+                <div className={`${base} top-0 right-0 border-l-0 border-b-0 rounded-tr-lg ${color}`} />
+                <div className={`${base} bottom-0 left-0 border-r-0 border-t-0 rounded-bl-lg ${color}`} />
+                <div className={`${base} bottom-0 right-0 border-l-0 border-t-0 rounded-br-lg ${color}`} />
+              </>
+            )
+          })()}
         </div>
       </div>
 
