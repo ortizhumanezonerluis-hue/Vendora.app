@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import MainLayout from '../components/layout/MainLayout'
 import { cashService } from '../services/cashService'
 import { ArqueoCaja } from '../types'
@@ -6,9 +6,11 @@ import { useAuth } from '../components/auth/AuthContext'
 import { formatCOP } from '../lib/utils'
 import { toast } from '../components/ui/Toaster'
 import { SkeletonPage } from '../components/ui/Skeleton'
+import { Select } from '../components/ui/Select'
 import {
   Wallet, CheckCircle2, Clock, AlertTriangle, X,
-  ChevronRight, Banknote, CreditCard, Smartphone, RotateCcw
+  ChevronRight, Banknote, CreditCard, Smartphone, RotateCcw,
+  Calendar as CalendarIcon, ChevronLeft
 } from 'lucide-react'
 
 interface SessionWithSales extends ArqueoCaja {
@@ -34,8 +36,25 @@ export default function CashHistoryPage() {
   // Filter states
   const [selectedCashier, setSelectedCashier] = useState<string>('all')
   const [dateRangeFilter, setDateRangeFilter] = useState<string>('all') // 'all', '7', '15', '30', '60', 'custom'
-  const [customStartDate, setCustomStartDate] = useState<string>('')
-  const [customEndDate, setCustomEndDate] = useState<string>('')
+
+  // Custom DatePicker Range State
+  const [rangeStart, setRangeStart] = useState<Date | null>(null)
+  const [rangeEnd, setRangeEnd] = useState<Date | null>(null)
+  const [hoverDate, setHoverDate] = useState<Date | null>(null)
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const datePickerRef = useRef<HTMLDivElement>(null)
+
+  // Click outside DatePicker handler
+  useEffect(() => {
+    const clickOutside = (e: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
+        setShowDatePicker(false)
+      }
+    }
+    document.addEventListener('mousedown', clickOutside)
+    return () => document.removeEventListener('mousedown', clickOutside)
+  }, [])
 
   // Unique list of cashiers for filter select (computed from sessions)
   const cashiers = useMemo(() => {
@@ -61,13 +80,13 @@ export default function CashHistoryPage() {
         today.setHours(23, 59, 59, 999)
 
         if (dateRangeFilter === 'custom') {
-          if (customStartDate) {
-            const start = new Date(customStartDate)
+          if (rangeStart) {
+            const start = new Date(rangeStart)
             start.setHours(0, 0, 0, 0)
             if (sessionDate < start) return false
           }
-          if (customEndDate) {
-            const end = new Date(customEndDate)
+          if (rangeEnd) {
+            const end = new Date(rangeEnd)
             end.setHours(23, 59, 59, 999)
             if (sessionDate > end) return false
           }
@@ -84,7 +103,7 @@ export default function CashHistoryPage() {
 
       return true
     })
-  }, [sessions, selectedCashier, dateRangeFilter, customStartDate, customEndDate])
+  }, [sessions, selectedCashier, dateRangeFilter, rangeStart, rangeEnd])
 
   useEffect(() => {
     loadHistory()
@@ -165,8 +184,67 @@ export default function CashHistoryPage() {
   const sessionTotal = (sales: any[]) =>
     sales.reduce((acc, s) => acc + s.total, 0)
 
-  const cashSalesTotal = (sales: any[]) =>
-    sales.filter(s => s.metodo_pago === 'efectivo').reduce((acc, s) => acc + s.total, 0)
+  // Calendar logic helpers
+  const daysInMonth = useMemo(() => {
+    const year = currentMonth.getFullYear()
+    const month = currentMonth.getMonth()
+    const date = new Date(year, month, 1)
+    const days = []
+    
+    // Fill empty days before start of month
+    const firstDayIndex = date.getDay()
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push(null)
+    }
+    
+    // Fill days of the month
+    while (date.getMonth() === month) {
+      days.push(new Date(date))
+      date.setDate(date.getDate() + 1)
+    }
+    return days
+  }, [currentMonth])
+
+  const changeMonth = (val: number) => {
+    const next = new Date(currentMonth)
+    next.setMonth(next.getMonth() + val)
+    setCurrentMonth(next)
+  }
+
+  const handleSelectDay = (day: Date) => {
+    if (!rangeStart || (rangeStart && rangeEnd)) {
+      setRangeStart(day)
+      setRangeEnd(null)
+    } else {
+      if (day < rangeStart) {
+        setRangeEnd(rangeStart)
+        setRangeStart(day)
+      } else {
+        setRangeEnd(day)
+      }
+      setDateRangeFilter('custom')
+      setShowDatePicker(false)
+    }
+  }
+
+  const isInRange = (day: Date) => {
+    if (!rangeStart) return false
+    const end = rangeEnd || hoverDate
+    if (!end) return false
+    return day > rangeStart && day < end
+  }
+
+  const rangeDateLabel = () => {
+    if (rangeStart && rangeEnd) {
+      const fmtShort = (d: Date) => d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
+      return `${fmtShort(rangeStart)} → ${fmtShort(rangeEnd)}`
+    } else if (rangeStart) {
+      return rangeStart.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) + ' →...'
+    }
+    return 'Seleccionar Rango'
+  }
+
+  const monthLabel = currentMonth.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
 
   if (loading) {
     return (
@@ -185,35 +263,41 @@ export default function CashHistoryPage() {
           <div className="px-4 py-3.5 border-b border-gray-100 space-y-3 shrink-0">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[13px] font-semibold text-gray-900">Turnos de Caja</p>
+                <p className="text-[13px] font-semibold text-gray-900 font-sans">Turnos de Caja</p>
                 <p className="text-[11px] text-gray-400 mt-0.5">{filteredSessions.length} de {sessions.length} filtrados</p>
               </div>
             </div>
 
-            {/* Filter Controls (Premium style) */}
-            <div className="space-y-2">
+            {/* Filter Controls (Notion / Shadcn style) */}
+            <div className="space-y-3">
               {profile?.rol === 'admin' && (
-                <div>
-                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Filtrar Cajero</label>
-                  <select
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Cajero</label>
+                  <Select
                     value={selectedCashier}
                     onChange={(e) => setSelectedCashier(e.target.value)}
-                    className="w-full h-8 px-2.5 mt-0.5 text-[12px] bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-gray-700 focus:outline-none transition-colors"
+                    className="h-8 bg-gray-50/50 hover:bg-gray-100/50"
                   >
                     <option value="all">Todos los cajeros</option>
                     {cashiers.map(name => (
                       <option key={name} value={name}>{name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               )}
 
-              <div>
-                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Intervalo de Tiempo</label>
-                <select
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider block">Intervalo</label>
+                <Select
                   value={dateRangeFilter}
-                  onChange={(e) => setDateRangeFilter(e.target.value)}
-                  className="w-full h-8 px-2.5 mt-0.5 text-[12px] bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-gray-700 focus:outline-none transition-colors"
+                  onChange={(e) => {
+                    setDateRangeFilter(e.target.value)
+                    if (e.target.value !== 'custom') {
+                      setRangeStart(null)
+                      setRangeEnd(null)
+                    }
+                  }}
+                  className="h-8 bg-gray-50/50 hover:bg-gray-100/50"
                 >
                   <option value="all">Todos los registros</option>
                   <option value="7">Últimos 7 días</option>
@@ -221,29 +305,73 @@ export default function CashHistoryPage() {
                   <option value="30">Últimos 30 días</option>
                   <option value="60">Últimos 60 días</option>
                   <option value="custom">Rango personalizado...</option>
-                </select>
+                </Select>
               </div>
 
               {dateRangeFilter === 'custom' && (
-                <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                  <div>
-                    <label className="text-[8px] font-semibold text-gray-400 block">Inicio</label>
-                    <input
-                      type="date"
-                      value={customStartDate}
-                      onChange={(e) => setCustomStartDate(e.target.value)}
-                      className="w-full h-7 px-2 text-[10px] bg-gray-50 border border-gray-200 rounded-md focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[8px] font-semibold text-gray-400 block">Fin</label>
-                    <input
-                      type="date"
-                      value={customEndDate}
-                      onChange={(e) => setCustomEndDate(e.target.value)}
-                      className="w-full h-7 px-2 text-[10px] bg-gray-50 border border-gray-200 rounded-md focus:outline-none"
-                    />
-                  </div>
+                <div className="relative pt-1 animate-in fade-in slide-in-from-top-1 duration-200" ref={datePickerRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowDatePicker(!showDatePicker)}
+                    className="w-full h-8 px-2.5 border border-gray-200 rounded-lg text-[12px] font-medium text-gray-700 bg-white hover:bg-gray-50 flex items-center justify-between transition-colors shadow-sm"
+                  >
+                    <span className="truncate">{rangeDateLabel()}</span>
+                    <CalendarIcon size={12} className="text-gray-400" />
+                  </button>
+
+                  {showDatePicker && (
+                    <div className="absolute left-0 right-0 mt-1.5 bg-white border border-gray-250/80 rounded-xl shadow-xl p-3 z-50 animate-in fade-in duration-150">
+                      {/* Header */}
+                      <div className="flex items-center justify-between mb-3">
+                        <button type="button" onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-100 rounded text-gray-600">
+                          <ChevronLeft size={14} />
+                        </button>
+                        <span className="text-[12px] font-semibold text-gray-900 capitalize">{monthLabel}</span>
+                        <button type="button" onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-100 rounded text-gray-600">
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+
+                      {/* Weekdays */}
+                      <div className="grid grid-cols-7 gap-1 text-center mb-1">
+                        {['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'].map((d) => (
+                          <span key={d} className="text-[9px] font-bold text-gray-400 uppercase">{d}</span>
+                        ))}
+                      </div>
+
+                      {/* Days grid */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {daysInMonth.map((day, idx) => {
+                          if (!day) return <div key={`empty-${idx}`} />
+                          const isStart = rangeStart && day.toDateString() === rangeStart.toDateString()
+                          const isEnd = rangeEnd && day.toDateString() === rangeEnd.toDateString()
+                          const inRange = isInRange(day)
+                          const isToday = day.toDateString() === new Date().toDateString()
+                          return (
+                            <button
+                              key={day.toISOString()}
+                              type="button"
+                              onClick={() => handleSelectDay(day)}
+                              onMouseEnter={() => setHoverDate(day)}
+                              onMouseLeave={() => setHoverDate(null)}
+                              className={[
+                                'h-7 w-full text-[11px] font-medium flex items-center justify-center transition-colors',
+                                isStart || isEnd
+                                  ? 'bg-gray-900 text-white font-semibold rounded-md'
+                                  : inRange
+                                  ? 'bg-gray-100 text-gray-800 rounded-none'
+                                  : isToday
+                                  ? 'bg-gray-50 text-gray-900 border border-gray-200 rounded-md'
+                                  : 'text-gray-700 hover:bg-gray-100 rounded-md'
+                              ].join(' ')}
+                            >
+                              {day.getDate()}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
