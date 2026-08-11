@@ -213,7 +213,7 @@ export default function InventoryPage() {
       precio_venta: parseFloat(newProdSale) || 0,
       stock_actual: parseInt(newProdStock) || 0,
       stock_minimo: 10,
-      porcentaje_iva: parseFloat(newProdIva) || 19.00,
+      porcentaje_iva: Number.isFinite(parseFloat(newProdIva)) ? parseFloat(newProdIva) : 19.00,
       proveedor_id: newProdSupplier || null
     } as any)
 
@@ -225,7 +225,7 @@ export default function InventoryPage() {
         barcode: newProdSku,
         name: newProdName,
         category: newProdCategory,
-        default_iva: parseFloat(newProdIva) || 19.00
+        default_iva: Number.isFinite(parseFloat(newProdIva)) ? parseFloat(newProdIva) : 19.00
       })
     }
 

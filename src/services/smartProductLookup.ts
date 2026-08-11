@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient'
-import { normalizeCategory, calculateDIANTax } from '../utils/productHelpers'
+import { normalizeCategory, calculateDIANTax, isAlreadyCanonical } from '../utils/productHelpers'
 
 export interface SmartProduct {
   barcode: string
@@ -35,8 +35,10 @@ export async function smartLookupBarcode(barcode: string): Promise<SmartProduct 
         barcode: dbItem.barcode,
         name: dbItem.name,
         brand: dbItem.brand,
-        category: normalizeCategory(dbItem.category),
-        default_iva: parseFloat(dbItem.default_iva) || calculateDIANTax(dbItem.name, dbItem.category),
+        // Category is already stored normalized in master_catalog — don't re-normalize
+        // Re-normalizing causes 'Abarrotes' → 'Bebidas' due to 'te' substring bug
+        category: isAlreadyCanonical(dbItem.category) ?? normalizeCategory(dbItem.category),
+        default_iva: Number.isFinite(parseFloat(dbItem.default_iva)) ? parseFloat(dbItem.default_iva) : calculateDIANTax(dbItem.name, dbItem.category),
         image_url: dbItem.image_url,
         source: 'master_catalog'
       }
