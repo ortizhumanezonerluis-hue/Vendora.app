@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../auth/AuthContext'
-import { Search, Bell, LogOut, User, Circle } from 'lucide-react'
+import { Search, Bell, LogOut, User, Circle, Smartphone, Copy, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 
 type TopbarProps = {
@@ -22,6 +22,7 @@ export default function Topbar({ title }: TopbarProps) {
   const [showNotifications, setShowNotifications] = useState(false)
   const [alerts, setAlerts] = useState<NotificationAlert[]>([])
   const [searchVal, setSearchVal] = useState('')
+  const [scannerLinkCopied, setScannerLinkCopied] = useState(false)
 
   const profileRef = useRef<HTMLDivElement>(null)
   const notificationsRef = useRef<HTMLDivElement>(null)
@@ -121,6 +122,33 @@ export default function Topbar({ title }: TopbarProps) {
             className="w-48 h-7 pl-8 pr-3 text-[12px] border border-gray-200 rounded-md bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:bg-white transition-colors"
           />
         </div>
+
+        {/* Scanner Pairing Button — visible to admin only */}
+        {profile?.rol === 'admin' && profile?.negocio_id && (
+          <button
+            title="Copiar enlace del escáner móvil"
+            onClick={() => {
+              const url = `${window.location.origin}/scanner-app?negocio_id=${profile.negocio_id}`
+              navigator.clipboard.writeText(url).then(() => {
+                setScannerLinkCopied(true)
+                setTimeout(() => setScannerLinkCopied(false), 2500)
+              })
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 text-gray-500 hover:text-gray-800 hover:bg-gray-50 text-[12px] font-medium transition-colors"
+          >
+            {scannerLinkCopied ? (
+              <>
+                <Check size={13} className="text-emerald-500" />
+                <span className="text-emerald-600">Copiado!</span>
+              </>
+            ) : (
+              <>
+                <Smartphone size={13} />
+                <span>Escáner Móvil</span>
+              </>
+            )}
+          </button>
+        )}
 
         {/* Connection status */}
         <div className="flex items-center gap-1.5 text-[11px] text-gray-400">

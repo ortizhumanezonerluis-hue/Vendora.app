@@ -4,14 +4,19 @@ import { sendRemoteScan } from '../hooks/useRemoteScanner'
 import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode'
 import { Scan, Sparkles, Volume2, ShieldAlert, ArrowLeft } from 'lucide-react'
 import { toast } from '../components/ui/Toaster'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 export default function ScannerAppPage() {
   const { profile } = useAuth()
+  const [searchParams] = useSearchParams()
   const [scanMode, setScanMode] = useState<'form' | 'continuous'>('form')
   const [lastScanned, setLastScanned] = useState<string | null>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [cameraPermission, setCameraPermission] = useState<boolean | null>(null)
+
+  // Resolve Business/Tenant ID from URL query parameters (sessionless pairing) or logged-in profile
+  const resolvedNegocioId = searchParams.get('negocio_id') || profile?.negocio_id
+  const resolvedUserId = profile?.id || 'anon_scanner_device'
 
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const lastScannedTimeRef = useRef<number>(0)
@@ -53,10 +58,10 @@ export default function ScannerAppPage() {
     return () => {
       stopScanner()
     }
-  }, [scanMode, profile])
+  }, [scanMode, resolvedNegocioId])
 
   const startScanner = async () => {
-    if (!profile?.negocio_id) return
+    if (!resolvedNegocioId) return
     setIsScanning(true)
     
     // HTML5 QR Code Setup
@@ -92,7 +97,7 @@ export default function ScannerAppPage() {
 
               // Emit scan event over Supabase Realtime Broadcast channel
               try {
-                await sendRemoteScan(profile.negocio_id!, profile.id, decodedText, scanMode)
+                await sendRemoteScan(resolvedNegocioId, resolvedUserId, decodedText, scanMode)
                 toast(`Código emitido: ${decodedText}`, { type: 'success' })
               } catch (err) {
                 console.error('Error enviando broadcast de escaneo:', err)
@@ -124,16 +129,43 @@ export default function ScannerAppPage() {
     setIsScanning(false)
   }
 
+  // Show a clear error if the scanner cannot be paired with any business
+  if (!resolvedNegocioId) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-8 font-sans text-center">
+        <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mb-5">
+          <ShieldAlert size={30} className="text-amber-600" />
+        </div>
+        <p className="text-[15px] font-bold text-gray-900 mb-2">Escáner no configurado</p>
+        <p className="text-[12px] text-gray-500 leading-relaxed max-w-xs">
+          Este escáner necesita estar vinculado a un negocio. Abre este enlace desde el panel de Vendora
+          o pídele al administrador que comparta el enlace de escáner con el ID de tu tienda.
+        </p>
+        <p className="mt-4 text-[11px] font-mono bg-gray-100 text-gray-600 px-3 py-2 rounded-md">
+          {window.location.origin}/scanner-app?negocio_id=TU_ID
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans select-none max-w-md mx-auto relative overflow-hidden">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 shrink-0 flex items-center justify-between">
-        <Link to="/" className="p-1.5 hover:bg-gray-150 rounded-lg text-gray-500 transition-colors">
+        <Link to="/" className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
           <ArrowLeft size={16} />
         </Link>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-          <span className="text-[12px] font-bold text-gray-800 tracking-tight">Escáner Móvil Activo</span>
+        <div className="flex flex-col items-center">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span className="text-[12px] font-bold text-gray-800 tracking-tight">Escáner Móvil Activo</span>
+          </div>
+          {!profile && (
+            <span className="text-[10px] text-gray-400 mt-0.5">Modo sin sesión · ID: {resolvedNegocioId?.slice(0,8)}…</span>
+          )}
+          {profile && (
+            <span className="text-[10px] text-gray-400 mt-0.5">{profile.nombre} · {profile.negocio_id?.slice(0,8)}…</span>
+          )}
         </div>
         <div className="w-7 h-7" />
       </header>

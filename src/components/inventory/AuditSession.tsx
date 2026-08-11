@@ -7,6 +7,8 @@ import { formatCOP } from '../../lib/utils'
 import { toast } from '../ui/Toaster'
 import { Search, Scan, Save, Check, ArrowLeft, Plus, Trash2, HelpCircle } from 'lucide-react'
 import { Select } from '../ui/Select'
+import { useRemoteScanner } from '../../hooks/useRemoteScanner'
+import { useAuth } from '../auth/AuthContext'
 
 interface AuditSessionProps {
   session: SesionAuditoria
@@ -31,7 +33,32 @@ export default function AuditSession({ session, onBack, onFinalize, usuarioNombr
   const [scannedCode, setScannedCode] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const { profile } = useAuth()
   const scanInputRef = useRef<HTMLInputElement>(null)
+
+  // Listen to remote scanner events during active physical audit counts
+  useRemoteScanner(session.negocio_id, profile?.id, (code) => {
+    const matched = products.find(p => p.codigo_barras === code)
+    if (matched) {
+      setCountedItems(prev => {
+        const existing = prev[matched.id]
+        return {
+          ...prev,
+          [matched.id]: {
+            producto_id: matched.id,
+            producto_nombre: matched.nombre,
+            sku: matched.codigo_barras || '',
+            stock_sistema: matched.stock_actual,
+            cantidad_contada: (existing?.cantidad_contada || 0) + 1,
+            costo_unitario: matched.precio_costo || 0
+          }
+        }
+      })
+      toast(`Escaneado (Móvil): ${matched.nombre} (+1)`, { type: 'success' })
+    } else {
+      toast(`Código móvil "${code}" no está en el alcance de esta auditoría`, { type: 'error' })
+    }
+  })
 
   useEffect(() => {
     loadSetupData()

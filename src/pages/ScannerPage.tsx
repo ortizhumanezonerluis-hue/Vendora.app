@@ -6,6 +6,7 @@ import { formatCOP } from '../lib/utils'
 import { Scan, Package, Search, CheckCircle, XCircle } from 'lucide-react'
 
 import { useAuth } from '../components/auth/AuthContext'
+import { useRemoteScanner } from '../hooks/useRemoteScanner'
 
 export default function ScannerPage() {
   const { profile } = useAuth()
@@ -22,6 +23,12 @@ export default function ScannerPage() {
     )
     setResult(found ?? 'not_found')
   }
+
+  // Listen to remote scans in real-time on the desktop scan page
+  useRemoteScanner(profile?.negocio_id, profile?.id, (code) => {
+    setInput(code)
+    search(code)
+  })
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {

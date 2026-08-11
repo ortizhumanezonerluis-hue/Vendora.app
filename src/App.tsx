@@ -23,11 +23,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route
             path="/scanner-app"
-            element={
-              <ProtectedRoute>
-                <ScannerAppPage />
-              </ProtectedRoute>
-            }
+            element={<ScannerAppPage />}
           />
           
           {/* Protected Routes */}
