@@ -1,35 +1,60 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../components/auth/AuthContext'
 import { sendRemoteScan } from '../hooks/useRemoteScanner'
-import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode'
-import { Scan, Sparkles, Volume2, ShieldAlert, ArrowLeft } from 'lucide-react'
+import { Html5Qrcode } from 'html5-qrcode'
+import { Sparkles, ShieldAlert, ArrowLeft } from 'lucide-react'
 import { toast } from '../components/ui/Toaster'
 import { Link, useSearchParams } from 'react-router-dom'
+
+/**
+ * Global CSS injected once to strip all html5-qrcode library UI chrome
+ * and make its <video> fill the parent div completely.
+ * The library IDs child elements as: {id}__scan_region, {id}__dashboard, {id}__filescan_input
+ */
+const SCANNER_CSS = `
+  /* Make the container fill the screen */
+  #camera-reader-view {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
+    border: none !important;
+  }
+  /* Stretch the video to cover the full screen */
+  #camera-reader-view video {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border: none !important;
+    background: #000 !important;
+  }
+  /* Hide the library's own scan region, dashboard, and shading overlays */
+  #camera-reader-view__scan_region,
+  #camera-reader-view__dashboard,
+  #camera-reader-view__dashboard_section,
+  #camera-reader-view__filescan_input,
+  #camera-reader-view img {
+    display: none !important;
+  }
+`
 
 export default function ScannerAppPage() {
   const { profile } = useAuth()
   const [searchParams] = useSearchParams()
   const [scanMode, setScanMode] = useState<'form' | 'continuous'>('form')
   const [lastScanned, setLastScanned] = useState<string | null>(null)
-  const [isScanning, setIsScanning] = useState(false)
   const [cameraPermission, setCameraPermission] = useState<boolean | null>(null)
 
-  // Resolve Business/Tenant ID from URL query parameters (sessionless pairing) or logged-in profile
   const resolvedNegocioId = searchParams.get('negocio_id') || profile?.negocio_id
   const resolvedUserId = profile?.id || 'anon_scanner_device'
 
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const lastScannedTimeRef = useRef<number>(0)
-  const beepAudioRef = useRef<HTMLAudioElement | null>(null)
-
-  // Initialize audio feedback element
-  useEffect(() => {
-    // Generate a simple synthesize-like beep using Web Audio API or a tiny base64 audio
-    beepAudioRef.current = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAG')
-  }, [])
 
   const triggerBeepAndVibrate = () => {
-    // Web Audio API Beep (reliable fallback)
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)()
       const oscillator = audioCtx.createOscillator()
@@ -37,41 +62,34 @@ export default function ScannerAppPage() {
       oscillator.connect(gainNode)
       gainNode.connect(audioCtx.destination)
       oscillator.type = 'sine'
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime) // A5 note (nice sharp beep)
-      gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime)
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime)
+      gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime)
       oscillator.start()
-      oscillator.stop(audioCtx.currentTime + 0.1) // 100ms
-    } catch (e) {
-      console.warn('Web Audio API not supported or user gesture needed:', e)
-    }
-
-    // Vibrate
-    if ('vibrate' in navigator) {
-      navigator.vibrate(100)
-    }
+      oscillator.stop(audioCtx.currentTime + 0.1)
+    } catch (_) {}
+    if ('vibrate' in navigator) navigator.vibrate([50, 30, 50])
   }
 
   useEffect(() => {
-    // Setup and start camera
     startScanner()
-
-    return () => {
-      stopScanner()
-    }
+    return () => { stopScanner() }
   }, [scanMode, resolvedNegocioId])
 
   const startScanner = async () => {
     if (!resolvedNegocioId) return
-    setIsScanning(true)
-    
-    // HTML5 QR Code Setup
+
     try {
       const cameras = await Html5Qrcode.getCameras()
       if (cameras && cameras.length > 0) {
         setCameraPermission(true)
-        // Select back camera if available
-        const backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('trasera'))
-        const cameraId = backCamera ? backCamera.id : cameras[0].id
+
+        // Prefer physical back/environment camera
+        const backCamera = cameras.find(c =>
+          c.label.toLowerCase().includes('back') ||
+          c.label.toLowerCase().includes('trasera') ||
+          c.label.toLowerCase().includes('environment')
+        )
+        const cameraId = backCamera ? backCamera.id : cameras[cameras.length - 1].id
 
         const html5QrCode = new Html5Qrcode('camera-reader-view')
         scannerRef.current = html5QrCode
@@ -80,17 +98,17 @@ export default function ScannerAppPage() {
           { deviceId: cameraId },
           {
             fps: 20,
-            qrbox: (width, height) => {
-              const size = Math.min(width, height) * 0.7
-              return { width: size, height: size * 0.45 }
-            },
-            // Advanced constraints to enforce macro focus and continuous autofocus on mobile devices
+            // qrbox set to 0 disables the library's own shaded scan region UI
+            qrbox: (width, height) => ({
+              width: Math.round(width * 0.72),
+              height: Math.round(height * 0.38)
+            }),
             videoConstraints: {
               deviceId: cameraId,
               width: { min: 640, ideal: 1280, max: 1920 },
               height: { min: 480, ideal: 720, max: 1080 },
               facingMode: 'environment',
-              // @ts-ignore
+              // @ts-ignore – non-standard but supported on most Android WebViews
               focusMode: { ideal: 'continuous' },
               // @ts-ignore
               advanced: [{ focusMode: 'continuous' }, { zoom: 1.0 }]
@@ -98,170 +116,178 @@ export default function ScannerAppPage() {
           },
           async (decodedText) => {
             const now = Date.now()
-            const cooldown = scanMode === 'form' ? 2000 : 800 // cooldown to prevent flooding
-            
+            const cooldown = scanMode === 'form' ? 2000 : 800
+
             if (now - lastScannedTimeRef.current > cooldown) {
               lastScannedTimeRef.current = now
               setLastScanned(decodedText)
               triggerBeepAndVibrate()
 
-              // Emit scan event over Supabase Realtime Broadcast channel
               try {
                 await sendRemoteScan(resolvedNegocioId, resolvedUserId, decodedText, scanMode)
                 toast(`Código emitido: ${decodedText}`, { type: 'success' })
               } catch (err) {
-                console.error('Error enviando broadcast de escaneo:', err)
+                console.error('[Scanner] Error enviando broadcast:', err)
               }
             }
           },
-          () => {
-            // Verbose error ignored to avoid spamming
-          }
+          () => { /* suppress verbose per-frame errors */ }
         )
       } else {
         setCameraPermission(false)
         toast('No se detectaron cámaras en el dispositivo', { type: 'error' })
       }
     } catch (err) {
-      console.error('Error inicializando cámara:', err)
+      console.error('[Scanner] Error inicializando cámara:', err)
       setCameraPermission(false)
     }
   }
 
   const stopScanner = async () => {
-    if (scannerRef.current && scannerRef.current.isScanning) {
-      try {
-        await scannerRef.current.stop()
-      } catch (err) {
-        console.warn('Error parando scanner:', err)
-      }
+    if (scannerRef.current?.isScanning) {
+      try { await scannerRef.current.stop() } catch (_) {}
     }
-    setIsScanning(false)
   }
 
-  // Show a clear error if the scanner cannot be paired with any business
+  /* ─── Unconfigured error screen ─────────────────────────────── */
   if (!resolvedNegocioId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-8 font-sans text-center">
-        <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mb-5">
-          <ShieldAlert size={30} className="text-amber-600" />
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center p-8 text-center">
+        <div className="w-16 h-16 bg-amber-500/20 rounded-3xl flex items-center justify-center mb-5 border border-amber-500/30">
+          <ShieldAlert size={28} className="text-amber-400" />
         </div>
-        <p className="text-[15px] font-bold text-gray-900 mb-2">Escáner no configurado</p>
-        <p className="text-[12px] text-gray-500 leading-relaxed max-w-xs">
-          Este escáner necesita estar vinculado a un negocio. Abre este enlace desde el panel de Vendora
-          o pídele al administrador que comparta el enlace de escáner con el ID de tu tienda.
+        <p className="text-[15px] font-bold text-white mb-2">Escáner no configurado</p>
+        <p className="text-[12px] text-gray-400 leading-relaxed max-w-xs">
+          Este escáner necesita estar vinculado a un negocio. Ábrelo desde el panel de Vendora o pide el enlace al administrador.
         </p>
-        <p className="mt-4 text-[11px] font-mono bg-gray-100 text-gray-600 px-3 py-2 rounded-md">
+        <p className="mt-5 text-[11px] font-mono bg-white/10 text-gray-300 px-3 py-2 rounded-lg border border-white/10">
           {window.location.origin}/scanner-app?negocio_id=TU_ID
         </p>
       </div>
     )
   }
 
+  /* ─── Main native fullscreen scanner ────────────────────────── */
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans select-none max-w-md mx-auto relative overflow-hidden">
-      {/* Header */}
-      <header className="bg-white px-4 py-3 shrink-0 flex items-center justify-between border-b border-gray-150">
-        <Link to="/" className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
-          <ArrowLeft size={16} />
-        </Link>
-        <div className="flex flex-col items-center">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-            <span className="text-[12px] font-bold text-gray-800 tracking-tight">Escáner Móvil Activo</span>
-          </div>
-          {!profile ? (
-            <span className="text-[10px] text-gray-400 mt-0.5">Modo sin sesión · ID: {resolvedNegocioId?.slice(0, 8)}...</span>
-          ) : (
-            <span className="text-[10px] text-gray-400 mt-0.5">{profile.nombre} · {profile.negocio_id?.slice(0, 8)}...</span>
-          )}
+    <div className="fixed inset-0 h-screen w-screen bg-black overflow-hidden select-none">
+
+      {/* Inject CSS to override the html5-qrcode library UI */}
+      <style>{SCANNER_CSS}</style>
+
+      {/* ── Layer 0: Camera feed (html5-qrcode mounts <video> here) ── */}
+      <div id="camera-reader-view" className="absolute inset-0 z-0" />
+
+      {/* ── Layer 1: Scanner overlay ─────────────────────────────── */}
+      <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
+        {/* Dark vignette mask with transparent cutout for scan zone */}
+        <div className="absolute inset-0 bg-black/40" />
+
+        {/* Scan zone — transparent window punched through the overlay via box-shadow */}
+        <div
+          className="relative w-72 h-44 z-10 rounded-lg"
+          style={{ boxShadow: '0 0 0 9999px rgba(0,0,0,0.42)' }}
+        >
+          {/* ── Corner brackets only, NO red lines, NO animations ── */}
+          <div className="absolute top-0 left-0 w-9 h-9 border-t-4 border-l-4 border-white rounded-tl-lg" />
+          <div className="absolute top-0 right-0 w-9 h-9 border-t-4 border-r-4 border-white rounded-tr-lg" />
+          <div className="absolute bottom-0 left-0 w-9 h-9 border-b-4 border-l-4 border-white rounded-bl-lg" />
+          <div className="absolute bottom-0 right-0 w-9 h-9 border-b-4 border-r-4 border-white rounded-br-lg" />
         </div>
-        <div className="w-7 h-7" />
-      </header>
-
-      {/* Switch Mode Controls */}
-      <div className="px-4 py-3 shrink-0 bg-white border-b border-gray-100 flex gap-2 justify-center">
-        <button
-          onClick={() => setScanMode('form')}
-          className={[
-            'px-4 py-2 rounded-lg text-[12px] font-semibold transition-all border flex items-center gap-1.5',
-            scanMode === 'form'
-              ? 'bg-purple-50 border-purple-200 text-purple-700 font-bold'
-              : 'bg-white border-gray-200 text-gray-500'
-          ].join(' ')}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
-          Modo Formulario
-        </button>
-
-        <button
-          onClick={() => setScanMode('continuous')}
-          className={[
-            'px-4 py-2 rounded-lg text-[12px] font-semibold transition-all border flex items-center gap-1.5',
-            scanMode === 'continuous'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-bold'
-              : 'bg-white border-gray-200 text-gray-500'
-          ].join(' ')}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-          Modo Rápido / POS
-        </button>
       </div>
 
-      {/* Camera Viewer Screen */}
-      <div className="flex-1 flex flex-col justify-center p-6 items-center relative bg-gray-50">
-        <div className="w-full aspect-[4/5] rounded-3xl overflow-hidden border border-gray-200/50 bg-black relative shadow-xl">
-          
-          {/* Guide Overlay for camera */}
-          <div id="camera-reader-view" className="w-full h-full relative" />
+      {/* ── Layer 2: Floating header ──────────────────────────────── */}
+      <div className="absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent flex flex-col gap-3 pointer-events-auto">
 
-          {/* Guide reticle matching Image 2 perfectly */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-            <div className="w-[70%] aspect-[1.3] relative">
-              {/* White corners overlay */}
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-md" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-md" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-md" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-md" />
-              
-              {/* Scanline Animation */}
-              <div className="absolute left-2 right-2 h-0.5 bg-red-500 shadow-[0_0_8px_#ef4444] top-1/2 -translate-y-1/2 animate-[pulse_1.5s_infinite]" />
+        {/* Top row — back arrow + status */}
+        <div className="flex items-center justify-between">
+          <Link
+            to="/"
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-white/15 backdrop-blur-md border border-white/20 hover:bg-white/25 transition-all"
+          >
+            <ArrowLeft size={17} className="text-white" />
+          </Link>
+
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span className="text-[13px] font-bold text-white tracking-tight">Escáner Móvil Activo</span>
             </div>
+            <span className="text-[10px] text-gray-300">
+              {profile ? `${profile.nombre} · ${profile.negocio_id?.slice(0, 8)}…` : `Sin sesión · ID: ${resolvedNegocioId?.slice(0, 8)}…`}
+            </span>
           </div>
+
+          {/* Spacer to keep status centered */}
+          <div className="w-9" />
         </div>
 
-        {cameraPermission === false && (
-          <div className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center p-6 text-center z-20 space-y-3">
-            <ShieldAlert size={36} className="text-red-500" />
-            <p className="text-[13px] font-bold text-gray-900">Permiso de Cámara Denegado</p>
-            <p className="text-[11px] text-gray-500 leading-relaxed max-w-xs">
-              Por favor concede acceso a tu cámara desde la configuración del navegador para poder escanear.
+        {/* Mode switch pills */}
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setScanMode('form')}
+            className={[
+              'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border backdrop-blur-md',
+              scanMode === 'form'
+                ? 'bg-white/30 border-white/50 text-white shadow-sm'
+                : 'bg-white/10 border-white/20 text-white/60 hover:bg-white/20 hover:text-white/90'
+            ].join(' ')}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+            Modo Formulario
+          </button>
+
+          <button
+            onClick={() => setScanMode('continuous')}
+            className={[
+              'flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all border backdrop-blur-md',
+              scanMode === 'continuous'
+                ? 'bg-white/30 border-white/50 text-white shadow-sm'
+                : 'bg-white/10 border-white/20 text-white/60 hover:bg-white/20 hover:text-white/90'
+            ].join(' ')}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+            Modo Rápido / POS
+          </button>
+        </div>
+      </div>
+
+      {/* ── Layer 3: Camera permission error screen ───────────────── */}
+      {cameraPermission === false && (
+        <div className="absolute inset-0 z-30 bg-black/95 flex flex-col items-center justify-center p-6 text-center gap-4 pointer-events-auto">
+          <div className="w-16 h-16 bg-red-500/15 rounded-3xl flex items-center justify-center border border-red-500/30">
+            <ShieldAlert size={30} className="text-red-400" />
+          </div>
+          <div>
+            <p className="text-[15px] font-bold text-white mb-1.5">Permiso de Cámara Denegado</p>
+            <p className="text-[12px] text-gray-400 leading-relaxed max-w-[260px] mx-auto">
+              Concede acceso a la cámara desde la configuración del navegador para poder escanear.
             </p>
-            <button
-              onClick={startScanner}
-              className="px-4 py-2 bg-gray-950 text-white rounded-lg text-[12px] font-semibold"
-            >
-              Reintentar Permiso
-            </button>
           </div>
-        )}
-      </div>
+          <button
+            onClick={startScanner}
+            className="px-6 py-2.5 bg-white text-gray-900 rounded-xl text-[13px] font-bold hover:bg-gray-100 active:scale-95 transition-all"
+          >
+            Reintentar
+          </button>
+        </div>
+      )}
 
-      {/* Display Last Scan Status Bar at Bottom */}
-      <div className="p-5 shrink-0 bg-white border-t border-gray-200 text-center space-y-2">
-        <div className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">
+      {/* ── Layer 4: Floating footer ──────────────────────────────── */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex flex-col items-center gap-3 pointer-events-none">
+        <p className="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">
           Último Código Leído
-        </div>
-        <div className="h-10 flex items-center justify-center">
-          {lastScanned ? (
-            <div className="bg-gray-100 text-gray-900 px-4 py-1.5 rounded-full font-mono text-[13px] font-bold flex items-center gap-1.5 border border-gray-200">
-              <Sparkles size={12} className="text-amber-500" />
-              {lastScanned}
-            </div>
-          ) : (
-            <span className="text-[12px] text-gray-400 italic">Enfoque un código de barras para iniciar</span>
-          )}
-        </div>
+        </p>
+
+        {lastScanned ? (
+          <div className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-xl px-5 py-2.5 font-mono text-base tracking-widest flex items-center gap-2">
+            <Sparkles size={14} className="text-emerald-400 shrink-0" />
+            <span className="truncate max-w-[220px]">{lastScanned}</span>
+          </div>
+        ) : (
+          <p className="text-[12px] text-gray-500 italic">
+            Enfoque un código de barras para iniciar
+          </p>
+        )}
       </div>
     </div>
   )
