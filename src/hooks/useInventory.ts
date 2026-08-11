@@ -87,6 +87,12 @@ export function useInventory(negocioId?: string | null) {
   }
 
   const deleteProducto = async (id: string) => {
+    // Check if it is a local offline/fake product ID (starting with P_)
+    if (id.startsWith('P_')) {
+      setProductos((prev) => prev.filter((p) => p.id !== id))
+      return
+    }
+
     try {
       await inventoryService.deleteProducto(id)
       setProductos((prev) => prev.filter((p) => p.id !== id))
