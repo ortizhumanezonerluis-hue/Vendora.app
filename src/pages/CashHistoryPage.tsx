@@ -627,86 +627,94 @@ export default function CashHistoryPage() {
         )}
       </div>
 
-      {/* Retroactive count modal */}
-      {showRetroModal && retroSession && (
+           {showRetroModal && retroSession && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <form
-            onSubmit={handleRetroCount}
-            className="bg-white rounded-xl border border-gray-200 w-full max-w-sm shadow-2xl"
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <div>
-                <p className="text-[13px] font-semibold text-gray-900">Registrar Conteo Físico</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">
-                  Turno del {new Date(retroSession.fecha_apertura).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => { setShowRetroModal(false); setRetroCash('') }}
-                className="p-1.5 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
+          {(() => {
+            const cashSalesTotal = (sales: any[]) =>
+              sales
+                .filter(s => s.metodo_pago === 'efectivo')
+                .reduce((acc: number, s: any) => acc + s.total, 0)
+
+            return (
+              <form
+                onSubmit={handleRetroCount}
+                className="bg-white rounded-xl border border-gray-200 w-full max-w-sm shadow-2xl"
               >
-                <X size={15} />
-              </button>
-            </div>
-
-            <div className="px-5 py-5 space-y-4">
-              <div className="p-3 bg-gray-50 rounded-lg text-[12px] space-y-1.5">
-                <div className="flex justify-between text-gray-600">
-                  <span>Total sistema (efectivo)</span>
-                  <span className="font-mono font-semibold">{formatCOP(cashSalesTotal(sessionSales))}</span>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                  <div>
+                    <p className="text-[13px] font-semibold text-gray-900">Registrar Conteo Físico</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Turno del {new Date(retroSession.fecha_apertura).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setShowRetroModal(false); setRetroCash('') }}
+                    className="p-1.5 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={15} />
+                  </button>
                 </div>
-              </div>
 
-              <div>
-                <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
-                  Efectivo físico contado
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[14px]">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={retroCash}
-                    onChange={(e) => setRetroCash(e.target.value)}
-                    placeholder="0"
-                    className="w-full h-10 pl-7 pr-4 text-[15px] font-semibold border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-300 bg-white"
-                  />
+                <div className="px-5 py-5 space-y-4">
+                  <div className="p-3 bg-gray-50 rounded-lg text-[12px] space-y-1.5">
+                    <div className="flex justify-between text-gray-600">
+                      <span>Total sistema (efectivo)</span>
+                      <span className="font-mono font-semibold">{formatCOP(cashSalesTotal(sessionSales))}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">
+                      Efectivo físico contado
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[14px]">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        value={retroCash}
+                        onChange={(e) => setRetroCash(e.target.value)}
+                        placeholder="0"
+                        className="w-full h-10 pl-7 pr-4 text-[15px] font-semibold border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-300 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {retroCash && (
+                    <div className={[
+                      'p-3 rounded-lg border text-[12px]',
+                      (parseFloat(retroCash) - cashSalesTotal(sessionSales)) < 0
+                        ? 'bg-red-50 border-red-100 text-red-700'
+                        : 'bg-gray-50 border-gray-200 text-gray-700'
+                    ].join(' ')}>
+                      Diferencia: <span className="font-bold font-mono">
+                        {formatCOP(parseFloat(retroCash) - cashSalesTotal(sessionSales))}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              {retroCash && (
-                <div className={[
-                  'p-3 rounded-lg border text-[12px]',
-                  (parseFloat(retroCash) - cashSalesTotal(sessionSales)) < 0
-                    ? 'bg-red-50 border-red-100 text-red-700'
-                    : 'bg-gray-50 border-gray-200 text-gray-700'
-                ].join(' ')}>
-                  Diferencia: <span className="font-bold font-mono">
-                    {formatCOP(parseFloat(retroCash) - cashSalesTotal(sessionSales))}
-                  </span>
+                <div className="flex gap-2 px-5 pb-5">
+                  <button
+                    type="button"
+                    onClick={() => { setShowRetroModal(false); setRetroCash('') }}
+                    className="flex-1 h-9 border border-gray-200 text-[13px] text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={retroSaving}
+                    className="flex-1 h-9 bg-gray-900 text-white text-[13px] font-semibold rounded-lg hover:bg-gray-800 disabled:opacity-60 transition-colors"
+                  >
+                    {retroSaving ? 'Guardando...' : 'Guardar Conteo'}
+                  </button>
                 </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 px-5 pb-5">
-              <button
-                type="button"
-                onClick={() => { setShowRetroModal(false); setRetroCash('') }}
-                className="flex-1 h-9 border border-gray-200 text-[13px] text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={retroSaving}
-                className="flex-1 h-9 bg-gray-900 text-white text-[13px] font-semibold rounded-lg hover:bg-gray-800 disabled:opacity-60 transition-colors"
-              >
-                {retroSaving ? 'Guardando...' : 'Guardar Conteo'}
-              </button>
-            </div>
-          </form>
+              </form>
+            )
+          })()}
         </div>
       )}
     </MainLayout>
