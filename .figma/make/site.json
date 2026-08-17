@@ -1,5 +1,9 @@
 {
-  "description": "Manage inventory and point-of-sale operations efficiently with a user-friendly interface designed for businesses, enhancing productivity and accuracy.",
+  "title": "Vendora",
+  "icons": {
+    "icon": "/favicon.jpg"
+  },
+  "description": "Gestiona tu inventario, punto de venta y órdenes de compra de forma eficiente con Vendora.",
   "robots": {
     "index": false
   },

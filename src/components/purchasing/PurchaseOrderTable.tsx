@@ -139,7 +139,14 @@ export default function PurchaseOrderTable() {
   <title>Orden de Compra ${selectedOrder.codigo}</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
     body {
       font-family: 'Inter', Arial, sans-serif;
       font-size: 13px;
@@ -186,6 +193,15 @@ export default function PurchaseOrderTable() {
     @media print {
       body { padding: 16px 24px; }
       @page { size: A4 portrait; margin: 12mm; }
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      .card-header, thead tr, .totals-table .total-row td {
+        background-color: #111827 !important;
+        color: #ffffff !important;
+      }
     }
   </style>
 </head>
