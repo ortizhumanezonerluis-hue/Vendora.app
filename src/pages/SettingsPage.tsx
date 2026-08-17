@@ -31,6 +31,7 @@ export default function SettingsPage() {
   // Store info
   const [storeName, setStoreName] = useState('')
   const [storeAddress, setStoreAddress] = useState('')
+  const [storePhone, setStorePhone] = useState('')
   const [rfc, setRfc] = useState('')
   const [configId, setConfigId] = useState<string | null>(null)
   const [storeSaving, setStoreSaving] = useState(false)
@@ -76,6 +77,7 @@ export default function SettingsPage() {
           setConfigId(data.id)
           setStoreName(data.nombre || '')
           setStoreAddress(data.direccion || '')
+          setStorePhone(data.telefono || '')
           setRfc(data.rfc || '')
           setMinStock(String(data.stock_minimo_alerta ?? 10))
           setNotifyCash(Boolean(data.notif_caja ?? true))
@@ -125,6 +127,7 @@ export default function SettingsPage() {
       const payload: any = {
         nombre: storeName,
         direccion: storeAddress,
+        telefono: storePhone,
         rfc,
         stock_minimo_alerta: parseInt(minStock) || 10,
         notif_caja: notifyCash,
@@ -265,6 +268,7 @@ export default function SettingsPage() {
                 {[
                   { label: 'Nombre del Negocio', value: storeName, setter: setStoreName, placeholder: 'Ej: Tienda Vendora' },
                   { label: 'Dirección', value: storeAddress, setter: setStoreAddress, placeholder: 'Ej: Av. Caracas #45-12' },
+                  { label: 'Teléfono / WhatsApp del Negocio', value: storePhone, setter: setStorePhone, placeholder: 'Ej: 3001234567' },
                   { label: 'NIT / RUT', value: rfc, setter: setRfc, placeholder: 'Ej: 900.123.456-7' },
                 ].map(({ label, value, setter, placeholder }) => (
                   <div key={label}>
