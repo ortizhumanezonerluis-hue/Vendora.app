@@ -181,12 +181,12 @@ export default function PurchaseOrderTable() {
 
       {/* Details modal with print-sheet style */}
       {selectedOrder && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl border border-gray-200 w-full max-w-3xl shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-50 p-4 overflow-y-auto print:hidden">
+          <div className="bg-white rounded-xl border border-gray-200 w-full max-w-4xl shadow-2xl flex flex-col max-h-[95vh]">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
               <div>
-                <p className="text-[13px] font-semibold text-gray-900">Vista de Orden de Compra</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">{selectedOrder.codigo}</p>
+                <p className="text-[13px] font-bold text-gray-900">Vista de Orden de Compra</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">{selectedOrder.codigo} · {selectedOrder.proveedores?.nombre}</p>
               </div>
               <button
                 onClick={() => setSelectedOrder(null)}
@@ -196,118 +196,185 @@ export default function PurchaseOrderTable() {
               </button>
             </div>
 
-            {/* Print wrapper */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-6 print-container" id="printable-order">
+            {/* Print wrapper - Styled exactly like Image 2 */}
+            <div className="flex-1 overflow-y-auto p-8 bg-white text-gray-800 space-y-8 print:p-0" id="printable-order">
               
-              {/* PDF Header Style */}
-              <div className="flex justify-between items-start border-b border-gray-100 pb-5">
-                <div className="space-y-1">
-                  <h1 className="text-xl font-bold text-gray-950 tracking-tight">VENDORA</h1>
-                  <p className="text-[12px] text-gray-400">Orden de Compra Oficial</p>
-                  <p className="text-[11px] text-gray-400">
-                    Fecha de Emisión: {new Date(selectedOrder.fecha).toLocaleDateString('es-CO')}
-                  </p>
+              {/* TOP HEADER BLOCK */}
+              <div className="flex justify-between items-start">
+                <div className="space-y-1 text-[12px]">
+                  <div className="text-2xl font-bold tracking-tight text-gray-900">VENDORA</div>
+                  <p className="font-semibold">{profile?.negocio_id ? 'Licencia SaaS Activa' : 'Comercio Registrado'}</p>
+                  <p className="text-gray-500">Dirección: Local Principal</p>
+                  <p className="text-gray-500">Teléfono: Registro de Configuración</p>
                 </div>
-                <div className="text-right space-y-1">
-                  <p className="text-[14px] font-mono font-bold text-gray-900">{selectedOrder.codigo}</p>
-                  <p className="text-[11px] text-gray-400">Estado: <span className="font-semibold text-gray-800 uppercase">{selectedOrder.estado}</span></p>
-                </div>
-              </div>
-
-              {/* Business & Provider Info Card */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-gray-50/50 border border-gray-200/60 rounded-xl space-y-1">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Destinatario (Proveedor)</p>
-                  <p className="text-[13px] font-bold text-gray-900">{selectedOrder.proveedores?.nombre}</p>
-                  <p className="text-[12px] text-gray-600">Asesor: {selectedOrder.proveedores?.asesor || '—'}</p>
-                  <p className="text-[11px] text-gray-500">Tel/WhatsApp: {selectedOrder.proveedores?.telefono || '—'}</p>
-                  {selectedOrder.proveedores?.email && (
-                    <p className="text-[11px] text-gray-500">Correo: {selectedOrder.proveedores.email}</p>
-                  )}
-                </div>
-
-                <div className="p-4 bg-gray-50/50 border border-gray-200/60 rounded-xl flex flex-col justify-between">
-                  <div>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Instrucciones de Recepción</p>
-                    <p className="text-[11px] text-gray-600 mt-1">
-                      Por favor despachar los productos listados a la dirección del comercio registrada en la configuración.
-                    </p>
-                  </div>
-                  <div className="flex gap-1.5 mt-2 print:hidden">
-                    <span className="text-[11px] text-gray-500">Cambiar estado:</span>
-                    {(['pendiente', 'enviada', 'recibida'] as const).map(st => (
-                      <button
-                        key={st}
-                        onClick={() => handleStatusChange(selectedOrder.id, st)}
-                        className={[
-                          'px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors border',
-                          selectedOrder.estado === st
-                            ? 'bg-gray-900 border-gray-900 text-white'
-                            : 'border-gray-200 hover:bg-gray-100 text-gray-600'
-                        ].join(' ')}
-                      >
-                        {st}
-                      </button>
-                    ))}
+                <div className="text-right space-y-3">
+                  <h2 className="text-2xl font-bold tracking-wider text-gray-950">ORDEN DE COMPRA</h2>
+                  <div className="inline-grid grid-cols-2 border border-gray-200 rounded-lg overflow-hidden text-[11px] text-center divide-x divide-gray-200">
+                    <div className="bg-gray-50 px-3 py-1 font-semibold border-b border-gray-200">FECHA</div>
+                    <div className="bg-gray-50 px-3 py-1 font-semibold border-b border-gray-200">OC #</div>
+                    <div className="px-3 py-1.5 font-mono">{new Date(selectedOrder.fecha).toLocaleDateString('es-CO')}</div>
+                    <div className="px-3 py-1.5 font-mono font-bold">{selectedOrder.codigo.replace('OC-2026-', '')}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Items Table */}
-              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-left border-collapse">
+              {/* VENDEDOR & ENVIE A SECTION */}
+              <div className="grid grid-cols-2 gap-8">
+                {/* PROVEEDOR (VENDEDOR) */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="bg-gray-900 text-white text-[11px] font-bold px-4 py-2 uppercase tracking-wide">
+                    Proveedor (Vendedor)
+                  </div>
+                  <div className="p-4 text-[12px] space-y-1.5">
+                    <p className="font-bold text-gray-900 text-[13px]">{selectedOrder.proveedores?.nombre}</p>
+                    {selectedOrder.proveedores?.asesor && (
+                      <p><span className="text-gray-400">Atención / Asesor:</span> {selectedOrder.proveedores.asesor}</p>
+                    )}
+                    <p><span className="text-gray-400">Teléfono/WhatsApp:</span> {selectedOrder.proveedores?.telefono || '—'}</p>
+                    {selectedOrder.proveedores?.email && (
+                      <p><span className="text-gray-400">Email:</span> {selectedOrder.proveedores.email}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* DESTINO DE ENTREGA */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="bg-gray-900 text-white text-[11px] font-bold px-4 py-2 uppercase tracking-wide">
+                    Enviar A (Destinatario)
+                  </div>
+                  <div className="p-4 text-[12px] space-y-1.5">
+                    <p className="font-bold text-gray-900 text-[13px]">{profile?.nombre || 'Administración de Negocio'}</p>
+                    <p><span className="text-gray-400">Dirección:</span> Despachar a la dirección registrada en configuración</p>
+                    <p><span className="text-gray-400">Estado Orden:</span> <span className="font-bold uppercase text-amber-600">{selectedOrder.estado}</span></p>
+                  </div>
+                </div>
+              </div>
+
+              {/* SHIPPING LOGISTICS ROW */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-[11px]">
                   <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                      <th className="px-4 py-2.5">Código / PLU</th>
-                      <th className="px-4 py-2.5">Producto</th>
-                      <th className="px-4 py-2.5 text-center">Cantidad</th>
-                      <th className="px-4 py-2.5 text-right">Costo Unitario</th>
-                      <th className="px-4 py-2.5 text-right">Subtotal</th>
+                    <tr className="bg-gray-50 border-b border-gray-200 font-bold text-gray-700 divide-x divide-gray-200">
+                      <th className="px-4 py-2">REQUISAR</th>
+                      <th className="px-4 py-2">EMBARCAR VÍA</th>
+                      <th className="px-4 py-2">F.O.B.</th>
+                      <th className="px-4 py-2">CONDICIONES DE ENVÍO</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50 text-[12px] text-gray-700">
+                  <tbody>
+                    <tr className="divide-x divide-gray-200 text-gray-600">
+                      <td className="px-4 py-2 font-mono">Reabastecimiento automático</td>
+                      <td className="px-4 py-2">Terrestre / Proveedor</td>
+                      <td className="px-4 py-2">Punto de Entrega</td>
+                      <td className="px-4 py-2">Inmediato / Según Convenio</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ITEMS TABLE */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gray-950 text-white text-[10px] font-bold uppercase tracking-wider">
+                      <th className="px-4 py-2.5 w-32">ARTÍCULO # / PLU</th>
+                      <th className="px-4 py-2.5">DESCRIPCIÓN</th>
+                      <th className="px-4 py-2.5 text-center w-24">CANTIDAD</th>
+                      <th className="px-4 py-2.5 text-right w-36">PRECIO UNITARIO</th>
+                      <th className="px-4 py-2.5 text-right w-36">TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 text-[12px] text-gray-700">
                     {loadingDetails ? (
                       <tr>
                         <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
-                          Cargando ítems...
+                          Cargando ítems de la orden...
                         </td>
                       </tr>
                     ) : orderDetails.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-4 py-8 text-center text-gray-400">
-                          Sin productos asociados.
+                          Sin productos asociados a esta orden.
                         </td>
                       </tr>
                     ) : (
                       orderDetails.map((it) => (
-                        <tr key={it.id}>
-                          <td className="px-4 py-3 font-mono text-[11px]">{it.productos?.codigo_barras || '—'}</td>
-                          <td className="px-4 py-3 font-semibold text-gray-900">{it.productos?.nombre}</td>
+                        <tr key={it.id} className="hover:bg-gray-50/50">
+                          <td className="px-4 py-3 font-mono text-[11px] text-gray-500">{it.productos?.codigo_barras || '—'}</td>
+                          <td className="px-4 py-3 font-semibold text-gray-950">{it.productos?.nombre}</td>
                           <td className="px-4 py-3 text-center font-bold font-mono">x{it.cantidad}</td>
-                          <td className="px-4 py-3 text-right font-mono">{formatCOP(it.costo_unitario)}</td>
+                          <td className="px-4 py-3 text-right font-mono text-gray-600">{formatCOP(it.costo_unitario)}</td>
                           <td className="px-4 py-3 text-right font-mono font-bold text-gray-950">
                             {formatCOP(it.subtotal)}
                           </td>
                         </tr>
                       ))
                     )}
-                    <tr className="bg-gray-50/50 font-bold">
-                      <td colSpan={4} className="px-4 py-3 text-right text-gray-900 text-[12px]">Total Estimado</td>
-                      <td className="px-4 py-3 text-right font-mono text-gray-950 text-[13px]">
-                        {formatCOP(selectedOrder.costo_total)}
-                      </td>
-                    </tr>
                   </tbody>
                 </table>
               </div>
 
-              {/* Observations */}
-              {selectedOrder.observaciones && (
-                <div className="p-4 border border-gray-200 rounded-xl space-y-1">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Notas Especiales</p>
-                  <p className="text-[12px] text-gray-700 leading-relaxed">{selectedOrder.observaciones}</p>
+              {/* TOTALS & NOTES LAYOUT */}
+              <div className="grid grid-cols-12 gap-6 items-start">
+                {/* Comments box */}
+                <div className="col-span-7 border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="bg-gray-50 text-[10px] font-bold text-gray-500 px-4 py-2 uppercase tracking-wide border-b border-gray-200">
+                    Comentarios o instrucciones especiales
+                  </div>
+                  <div className="p-4 min-h-[90px] text-[12px] text-gray-600 leading-relaxed">
+                    {selectedOrder.observaciones || 'Favor despachar los productos en los horarios habituales de recepción y adjuntar la factura de venta correspondiente.'}
+                  </div>
                 </div>
-              )}
+
+                {/* Subtotals & totals table */}
+                <div className="col-span-5 border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-[12px]">
+                    <tbody className="divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-4 py-2.5 text-gray-500 font-medium">SUBTOTAL</td>
+                        <td className="px-4 py-2.5 text-right font-mono font-semibold">{formatCOP(selectedOrder.costo_total)}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 text-gray-500 font-medium">IMPUESTO</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-400">—</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 text-gray-500 font-medium">ENVÍO</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-400">—</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2.5 text-gray-500 font-medium">OTRO</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-gray-400">—</td>
+                      </tr>
+                      <tr className="bg-gray-900 text-white font-bold">
+                        <td className="px-4 py-3">TOTAL</td>
+                        <td className="px-4 py-3 text-right font-mono text-[14px]">
+                          {formatCOP(selectedOrder.costo_total)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Status Update Pill for Web Modal */}
+              <div className="flex gap-2 items-center justify-end pt-4 border-t border-gray-100 print\:hidden">
+                <span className="text-[11px] text-gray-400 font-medium">Marcar estado de la orden:</span>
+                {(['pendiente', 'enviada', 'recibida'] as const).map(st => (
+                  <button
+                    key={st}
+                    onClick={() => handleStatusChange(selectedOrder.id, st)}
+                    className={[
+                      'px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all border',
+                      selectedOrder.estado === st
+                        ? 'bg-gray-900 border-gray-900 text-white shadow-sm'
+                        : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+                    ].join(' ')}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Modal Actions */}

@@ -46,3 +46,38 @@ html, body, #root {
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
+
+/* Print Styles for clean documents (like invoices & purchase orders) */
+@media print {
+  /* Hide sidebar, topbar, scrollbars, dialog shadows, close buttons, and actions */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Show only the targeted print element and its contents */
+  #printable-order,
+  #printable-order * {
+    visibility: visible;
+  }
+  
+  #printable-order {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* Reset layout constraints and hide background shades during print */
+  body, html, #root {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}
