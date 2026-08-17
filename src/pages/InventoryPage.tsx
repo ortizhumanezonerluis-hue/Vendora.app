@@ -188,7 +188,7 @@ export default function InventoryPage() {
       tipo,
       cantidad: delta,
       motivo: adjustNote || REASON_OPTIONS.find((r) => r.key === adjustReason)!.label,
-      usuario_id: 'Ana López',
+      usuario_id: profile?.nombre || profile?.id || 'Sistema',
     })
 
     if (res) {

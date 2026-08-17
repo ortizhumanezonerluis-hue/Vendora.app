@@ -26,7 +26,7 @@ export function mapMockToDBMovement(m: any): MovimientoInventario {
     tipo: m.type === 'entry' ? 'entry' : m.type === 'sale' ? 'salida' : m.type === 'loss' ? 'merma' : 'ajuste',
     cantidad: m.qty || 0,
     motivo: m.reason || '',
-    usuario_id: m.user || 'Ana López',
+    usuario_id: m.user || 'Sistema',
     fecha: m.date || new Date().toISOString()
   }
 }

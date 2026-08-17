@@ -84,7 +84,7 @@ export function usePOS() {
 
   const checkout = async (
     paymentMethod: 'efectivo' | 'transferencia' | 'tarjeta',
-    usuarioId: string = 'Ana López',
+    usuarioId: string = 'Sistema',
     negocioId?: string | null
   ): Promise<Venta | null> => {
     setLoading(true)
