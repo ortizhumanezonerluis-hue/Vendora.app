@@ -14,6 +14,11 @@ import SettingsPage from './pages/SettingsPage'
 import AuditPage from './pages/AuditPage'
 import ScannerAppPage from './pages/ScannerAppPage'
 import ComprobantesPage from './pages/ComprobantesPage'
+import RutPage from './pages/accounting/RutPage'
+import LibroFiscalPage from './pages/accounting/LibroFiscalPage'
+import CostosSoportadosPage from './pages/accounting/CostosSoportadosPage'
+import ExtractosBancariosPage from './pages/accounting/ExtractosBancariosPage'
+import PagosMenoresPage from './pages/accounting/PagosMenoresPage'
 import { Toaster } from './components/ui/Toaster'
 
 export default function App() {
@@ -123,6 +128,56 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <ComprobantesPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Módulo de Contabilidad y Gestión Fiscal (Régimen Simplificado) */}
+          <Route
+            path="/contabilidad"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <Navigate to="/contabilidad/libro-fiscal" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contabilidad/rut"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <RutPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contabilidad/libro-fiscal"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <LibroFiscalPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contabilidad/costos-soportados"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <CostosSoportadosPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contabilidad/extractos-bancarios"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <ExtractosBancariosPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contabilidad/pagos-menores"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <PagosMenoresPage />
               </ProtectedRoute>
             }
           />

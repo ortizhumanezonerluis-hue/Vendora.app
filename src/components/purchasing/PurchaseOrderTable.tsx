@@ -25,6 +25,21 @@ export default function PurchaseOrderTable() {
   const [selectedOrder, setSelectedOrder] = useState<OrdenCompra | null>(null)
   const [orderDetails, setOrderDetails] = useState<any[]>([])
   const [loadingDetails, setLoadingDetails] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
+
+  // Auto-archive filter: hide 'recibida' orders older than 15 days from active list (keeps permanently in Libro Fiscal)
+  const visibleOrders = useMemo(() => {
+    const now = new Date().getTime()
+    return orders.filter(o => {
+      if (showArchived) return true
+      if (o.estado === 'recibida') {
+        const orderTime = new Date(o.fecha).getTime()
+        const diffDays = (now - orderTime) / (1000 * 60 * 60 * 24)
+        return diffDays <= 15
+      }
+      return true
+    })
+  }, [orders, showArchived])
 
   useEffect(() => {
     loadOrders()
@@ -345,20 +360,33 @@ export default function PurchaseOrderTable() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-[14px] font-bold text-gray-900">Historial de Órdenes de Compra</h2>
-        <p className="text-[12px] text-gray-400 mt-0.5">Consulta, imprime o envía órdenes de compra activas o recibidas</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-[14px] font-bold text-gray-900">Historial de Órdenes de Compra</h2>
+          <p className="text-[12px] text-gray-400 mt-0.5">Consulta, imprime o envía órdenes de compra activas o recibidas</p>
+        </div>
+        <button
+          onClick={() => setShowArchived(!showArchived)}
+          className={[
+            'px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all',
+            showArchived
+              ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
+              : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+          ].join(' ')}
+        >
+          {showArchived ? 'Ocultar archivadas (+15d)' : 'Ver archivadas (+15d)'}
+        </button>
       </div>
 
       {loading ? (
         <div className="h-48 border border-gray-100 rounded-xl bg-gray-50/50 flex items-center justify-center text-[12px] text-gray-400">
           Cargando historial de órdenes de compra...
         </div>
-      ) : orders.length === 0 ? (
+      ) : visibleOrders.length === 0 ? (
         <div className="h-48 border border-gray-100 rounded-xl bg-white flex flex-col items-center justify-center text-center p-6">
           <ShoppingBag size={20} className="text-gray-300 mb-2" />
-          <p className="text-[13px] font-semibold text-gray-700">Sin órdenes generadas</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">Ve a la pestaña de sugerencias para generar tu primera orden de compra</p>
+          <p className="text-[13px] font-semibold text-gray-700">Sin órdenes activas</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">Las órdenes recibidas hace más de 15 días se conservan en el Libro Fiscal</p>
         </div>
       ) : (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
@@ -376,7 +404,7 @@ export default function PurchaseOrderTable() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 text-[12px] text-gray-700">
-              {orders.map((o) => {
+              {visibleOrders.map((o) => {
                 const dateLabel = new Date(o.fecha).toLocaleDateString('es-CO', {
                   day: 'numeric', month: 'short', year: 'numeric'
                 })
