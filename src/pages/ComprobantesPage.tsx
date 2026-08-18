@@ -11,6 +11,15 @@ import {
   ChevronLeft, ChevronRight
 } from 'lucide-react'
 
+interface TicketItem {
+  cantidad: number
+  precio_unitario: number
+  subtotal?: number
+  productos?: {
+    nombre: string
+  } | null
+}
+
 interface Ticket {
   id: string
   fecha: string
@@ -19,6 +28,7 @@ interface Ticket {
   total: number
   metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia'
   estado: 'completada' | 'cancelada' | 'pendiente'
+  detalles_venta?: TicketItem[]
 }
 
 type FiltroEstado = 'todos' | 'completada' | 'cancelada'
@@ -32,6 +42,11 @@ export default function ComprobantesPage() {
   const [search, setSearch] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('todos')
   const [filtroMetodo, setFiltroMetodo] = useState<FiltroMetodo>('todos')
+  const [businessConfig, setBusinessConfig] = useState<{
+    nombre?: string
+    direccion?: string
+    telefono?: string
+  }>({})
 
   // Date range state
   const [datePreset, setDatePreset] = useState<DatePreset>('7dias')
@@ -43,8 +58,32 @@ export default function ComprobantesPage() {
   const datePickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (profile?.negocio_id) loadTickets()
+    if (profile?.negocio_id) {
+      loadBusinessConfig()
+      loadTickets()
+    }
   }, [profile])
+
+  const loadBusinessConfig = async () => {
+    if (!profile?.negocio_id) return
+    try {
+      const { data } = await supabase
+        .from('configuracion_negocio')
+        .select('nombre, direccion, telefono')
+        .eq('negocio_id', profile.negocio_id)
+        .limit(1)
+        .maybeSingle()
+      if (data) {
+        setBusinessConfig({
+          nombre: data.nombre || '',
+          direccion: data.direccion || '',
+          telefono: data.telefono || ''
+        })
+      }
+    } catch (err) {
+      console.warn('Could not load business config for ticket:', err)
+    }
+  }
 
   // Close date picker on outside click
   useEffect(() => {
@@ -62,13 +101,21 @@ export default function ComprobantesPage() {
     try {
       const { data, error } = await supabase
         .from('ventas')
-        .select('id, fecha, usuario_id, cajero, total, metodo_pago, estado')
+        .select(`
+          id, fecha, usuario_id, cajero, total, metodo_pago, estado,
+          detalles_venta (
+            cantidad, precio_unitario, subtotal,
+            productos (
+              nombre
+            )
+          )
+        `)
         .eq('negocio_id', profile!.negocio_id)
         .order('fecha', { ascending: false })
         .limit(1000)
 
       if (error) throw error
-      setTickets(data || [])
+      setTickets((data as any) || [])
     } catch (err: any) {
       toast(err.message || 'Error cargando recibos', { type: 'error' })
     } finally {
@@ -173,159 +220,234 @@ export default function ComprobantesPage() {
 
   const totalFiltrado = useMemo(() => filtered.reduce((s, t) => s + (t.total || 0), 0), [filtered])
 
-  // --- PRINT: Proper A4 document, centered ---
+  // --- PRINT: Clean, professional, realistic POS ticket ---
   const handlePrint = (ticket: Ticket) => {
     const fecha = new Date(ticket.fecha).toLocaleString('es-CO', {
-      weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+      day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
     })
-    const cajero = ticket.cajero || ticket.usuario_id || 'Sistema'
+    const cajero = ticket.cajero || ticket.usuario_id || 'Cajero'
     const ticketNum = ticket.id.slice(0, 8).toUpperCase()
+    const storeName = businessConfig.nombre || profile?.negocio?.nombre || "Vendora"
+    const storeAddress = businessConfig.direccion || ''
+    const storePhone = businessConfig.telefono || ''
+
     const totalFmt = new Intl.NumberFormat('es-CO', {
       style: 'currency', currency: 'COP', minimumFractionDigits: 0
     }).format(ticket.total)
 
     const metodoLabel: Record<string, string> = {
-      efectivo: 'Efectivo', tarjeta: 'Tarjeta de crédito/débito', transferencia: 'Transferencia bancaria'
+      efectivo: 'Efectivo',
+      tarjeta: 'Tarjeta',
+      transferencia: 'Transferencia'
     }
+
+    const items = ticket.detalles_venta || []
+    const itemsRows = items.length > 0
+      ? items.map(item => {
+          const name = item.productos?.nombre || 'Producto'
+          const qty = item.cantidad || 1
+          const unitPrice = item.precio_unitario || 0
+          const subtotal = item.subtotal || (qty * unitPrice)
+          const subtotalFmt = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(subtotal)
+          const unitFmt = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(unitPrice)
+
+          return `
+            <tr>
+              <td style="padding: 4px 0; font-weight: 600; vertical-align: top;">${qty}x</td>
+              <td style="padding: 4px 6px; vertical-align: top;">
+                <div>${name}</div>
+                <div style="font-size: 11px; color: #666;">${unitFmt} c/u</div>
+              </td>
+              <td style="padding: 4px 0; text-align: right; font-weight: 600; vertical-align: top;">${subtotalFmt}</td>
+            </tr>
+          `
+        }).join('')
+      : `
+        <tr>
+          <td colspan="3" style="padding: 8px 0; text-align: center; color: #777;">
+            1x Venta registrada (${totalFmt})
+          </td>
+        </tr>
+      `
 
     const html = `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
-  <title>Recibo de Venta #${ticketNum}</title>
+  <title>Ticket #${ticketNum}</title>
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
-      width: 100%; height: 100%;
-      background: #f5f5f5;
+      width: 100%;
+      background: #f1f5f9;
       display: flex;
-      align-items: flex-start;
       justify-content: center;
-      font-family: 'Segoe UI', Arial, sans-serif;
-      font-size: 14px;
-      color: #1a1a1a;
-    }
-    .page {
-      background: #ffffff;
-      width: 595px;
-      min-height: 842px;
-      padding: 52px 56px;
-      margin: 32px auto;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
-    }
-    .header {
-      text-align: center;
-      padding-bottom: 28px;
-      border-bottom: 2px solid #1a1a1a;
-      margin-bottom: 28px;
-    }
-    .logo-mark {
-      width: 44px; height: 44px;
-      background: #1a1a1a; border-radius: 10px;
-      display: inline-flex; align-items: center; justify-content: center;
-      margin: 0 auto 12px;
-    }
-    .logo-mark span {
-      color: #fff; font-weight: 800; font-size: 20px; letter-spacing: -1px;
-    }
-    h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 4px; }
-    .subtitle { font-size: 12px; color: #888; }
-    .ticket-num {
-      display: inline-block;
-      margin-top: 10px;
-      background: #f0f0f0;
-      padding: 4px 14px;
-      border-radius: 99px;
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      color: #444;
-    }
-    .section { margin-bottom: 22px; }
-    .section-title {
-      font-size: 10px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 1.2px;
-      color: #aaa; margin-bottom: 10px;
-    }
-    .row {
-      display: flex; justify-content: space-between;
-      padding: 8px 0; border-bottom: 1px solid #f0f0f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #111827;
       font-size: 13px;
+      line-height: 1.4;
+      padding: 20px 0;
     }
-    .row:last-child { border-bottom: none; }
-    .row .label { color: #666; }
-    .row .value { font-weight: 600; color: #1a1a1a; text-align: right; }
-    .total-row {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-top: 20px; padding: 16px 20px;
-      background: #1a1a1a; border-radius: 10px;
-      color: #fff;
+    .ticket {
+      background: #ffffff;
+      width: 340px;
+      padding: 24px 20px;
+      margin: 0 auto;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+      border-radius: 6px;
     }
-    .total-row .label { font-size: 13px; font-weight: 600; opacity: 0.7; }
-    .total-row .value { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
-    .badge {
-      display: inline-block;
-      padding: 3px 12px; border-radius: 99px;
-      font-size: 11px; font-weight: 700;
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .store-name {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      text-transform: uppercase;
+      margin-bottom: 2px;
     }
-    .badge-green { background: #ecfdf5; color: #059669; }
-    .badge-red { background: #fef2f2; color: #dc2626; }
-    .badge-yellow { background: #fffbeb; color: #d97706; }
+    .store-info {
+      font-size: 11px;
+      color: #4b5563;
+      margin-bottom: 2px;
+    }
+    .divider {
+      border-top: 1px dashed #9ca3af;
+      margin: 12px 0;
+    }
+    .ticket-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #374151;
+      margin: 2px 0;
+    }
+    .meta-row .label { color: #6b7280; }
+    .meta-row .val { font-weight: 600; }
+    table.items-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin: 4px 0;
+    }
+    table.items-table th {
+      font-size: 10px;
+      font-weight: 700;
+      color: #6b7280;
+      text-transform: uppercase;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .total-box {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed #9ca3af;
+    }
+    .total-line {
+      display: flex;
+      justify-content: space-between;
+      font-size: 16px;
+      font-weight: 800;
+      margin-top: 4px;
+    }
     .footer {
       text-align: center;
-      padding-top: 28px; border-top: 1px dashed #ddd;
-      margin-top: 28px; color: #aaa; font-size: 11px; line-height: 1.6;
+      margin-top: 14px;
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.5;
     }
     @media print {
-      html, body { background: #fff; }
-      .page { box-shadow: none; margin: 0; min-height: auto; }
+      body {
+        background: #fff;
+        padding: 0;
+      }
+      .ticket {
+        border: none;
+        box-shadow: none;
+        width: 100%;
+        max-width: 300px;
+        padding: 8px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="page">
-    <div class="header">
-      <div class="logo-mark"><span>V</span></div>
-      <h1>Recibo de Venta</h1>
-      <p class="subtitle">Comprobante interno de transacción</p>
-      <span class="ticket-num">TICKET #${ticketNum}</span>
+  <div class="ticket">
+    <!-- Header -->
+    <div class="text-center">
+      <div class="store-name">${storeName}</div>
+      ${storeAddress ? `<div class="store-info">${storeAddress}</div>` : ''}
+      ${storePhone ? `<div class="store-info">Tel: ${storePhone}</div>` : ''}
+      <div class="divider"></div>
+      <div class="ticket-title">Comprobante de Venta</div>
+      <div style="font-size: 12px; font-weight: 700; font-family: monospace;">TICKET #${ticketNum}</div>
     </div>
 
-    <div class="section">
-      <p class="section-title">Detalles de la Transacción</p>
-      <div class="row">
-        <span class="label">Fecha y hora</span>
-        <span class="value" style="text-transform:capitalize">${fecha}</span>
+    <div class="divider"></div>
+
+    <!-- Metadata -->
+    <div>
+      <div class="meta-row">
+        <span class="label">Fecha y hora:</span>
+        <span class="val">${fecha}</span>
       </div>
-      <div class="row">
-        <span class="label">Cajero</span>
-        <span class="value">${cajero}</span>
+      <div class="meta-row">
+        <span class="label">Atendido por:</span>
+        <span class="val">${cajero}</span>
       </div>
-      <div class="row">
-        <span class="label">Método de pago</span>
-        <span class="value">${metodoLabel[ticket.metodo_pago] || ticket.metodo_pago}</span>
+      <div class="meta-row">
+        <span class="label">Método de pago:</span>
+        <span class="val">${metodoLabel[ticket.metodo_pago] || ticket.metodo_pago}</span>
       </div>
-      <div class="row">
-        <span class="label">Estado</span>
-        <span class="value">
-          <span class="badge ${ticket.estado === 'completada' ? 'badge-green' : ticket.estado === 'cancelada' ? 'badge-red' : 'badge-yellow'}">
-            ${ticket.estado === 'completada' ? '✓ Completada' : ticket.estado === 'cancelada' ? '✕ Cancelada' : '○ Pendiente'}
-          </span>
-        </span>
+      <div class="meta-row">
+        <span class="label">Estado:</span>
+        <span class="val" style="text-transform: capitalize;">${ticket.estado}</span>
       </div>
     </div>
 
-    <div class="total-row">
-      <span class="label">TOTAL COBRADO</span>
-      <span class="value">${totalFmt}</span>
+    <div class="divider"></div>
+
+    <!-- Items table -->
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="text-align: left; width: 35px;">Cant</th>
+          <th style="text-align: left;">Descripción</th>
+          <th style="text-align: right;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemsRows}
+      </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="total-box">
+      <div class="total-line">
+        <span>TOTAL</span>
+        <span>${totalFmt}</span>
+      </div>
     </div>
 
+    <div class="divider"></div>
+
+    <!-- Footer -->
     <div class="footer">
-      <p><strong>Vendora</strong> — Sistema de Punto de Venta</p>
-      <p>Este documento es un comprobante interno de caja y no constituye factura electrónica.</p>
+      <p style="font-weight: 600; color: #374151;">¡Gracias por su compra!</p>
+      <p style="font-size: 10px; margin-top: 3px;">Documento interno de control de caja</p>
+      <p style="font-size: 10px; color: #9ca3af;">Vendora POS</p>
     </div>
   </div>
+
   <script>
     window.onload = function() {
       setTimeout(function() { window.print(); }, 400);
@@ -334,7 +456,7 @@ export default function ComprobantesPage() {
 </body>
 </html>`
 
-    const w = window.open('', '_blank', 'width=700,height=900,left=100,top=50')
+    const w = window.open('', '_blank', 'width=460,height=750,left=200,top=50')
     if (w) {
       w.document.write(html)
       w.document.close()

@@ -192,23 +192,24 @@ export default function POSPage() {
                           : 'border border-gray-200 hover:border-gray-900',
                       ].join(' ')}
                     >
-                      {/* Cart quantity badge — only shows when in cart */}
-                      {inCart ? (
+                      {/* Cart quantity badge on top right — only shows when in cart */}
+                      {inCart && (
                         <div className="absolute top-2 right-2 w-5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
                           {cartItem.cantidad}
-                        </div>
-                      ) : (
-                        <div className="absolute top-2 right-2 bg-gray-100 text-gray-500 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                          {prod.stock_actual} ud
                         </div>
                       )}
                       <div className="flex-1 min-w-0 pr-6 mt-1">
                         <p className="text-[12px] font-semibold text-gray-900 truncate">{prod.nombre}</p>
                         <p className="text-[10px] text-gray-400 font-mono mt-0.5 truncate">{prod.codigo_barras || 'Sin código'}</p>
                       </div>
-                      <p className="text-[13px] font-bold text-gray-900 font-mono mt-3">
-                        {formatCOP(prod.precio_venta)}
-                      </p>
+                      <div className="flex items-center justify-between mt-3">
+                        <p className="text-[13px] font-bold text-gray-900 font-mono">
+                          {formatCOP(prod.precio_venta)}
+                        </p>
+                        <span className="bg-gray-100 text-gray-500 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                          {prod.stock_actual} ud
+                        </span>
+                      </div>
                     </button>
                   )
                 })}
@@ -219,7 +220,7 @@ export default function POSPage() {
 
         {/* Cart / POS Sidebar */}
         <div className="w-80 shrink-0 border-l border-gray-200 bg-white flex flex-col overflow-hidden">
-          <div className="px-4 py-3.5 border-b border-gray-150 flex items-center justify-between shrink-0">
+          <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div>
               <p className="text-[13px] font-bold text-gray-900">Carrito de Cobro</p>
               <p className="text-[11px] text-gray-400 mt-0.5">{cart.reduce((a, c) => a + c.cantidad, 0)} artículos en lista</p>
