@@ -9,9 +9,6 @@ import { useRemoteScanner } from '../hooks/useRemoteScanner'
 import { useNavigate } from 'react-router-dom'
 import { SkeletonPage } from '../components/ui/Skeleton'
 import { cashService } from '../services/cashService'
-import { supabase } from '../lib/supabaseClient'
-import DianConfigModal from '../components/dian/DianConfigModal'
-import { FileCode } from 'lucide-react'
 import {
   Search,
   Plus,
@@ -63,12 +60,6 @@ export default function POSPage() {
   const [cashInput, setCashInput] = useState('')
   const [payMethod, setPayMethod] = useState<'cash' | 'transfer' | 'card'>('cash')
 
-  // Billing Fields (Colombian DIAN compliance)
-  const [clienteNombre, setClienteNombre] = useState('Consumidor Final')
-  const [clienteDocumento, setClienteDocumento] = useState('222222222222')
-  const [clienteTipoDoc, setClienteTipoDoc] = useState('13') // Default Cédula de Ciudadanía
-  const [isDianModalOpen, setIsDianModalOpen] = useState(false)
-
   const filtered = useMemo(() => {
     return productos.filter((p) => {
       const matchCat = category === CATEGORY_ALL || p.categoria === category
@@ -116,50 +107,6 @@ export default function POSPage() {
 
     const dbPaymentMethod = payMethod === 'cash' ? 'efectivo' : payMethod === 'card' ? 'tarjeta' : 'transferencia'
     setCheckoutState('paying')
-
-    try {
-      // 1. Intentar Facturación Electrónica DIAN a través de la Edge Function
-      const token = (await supabase.auth.getSession()).data.session?.access_token
-      const response = await fetch('https://qarurnzptlpoxizkthgo.supabase.co/functions/v1/dian-billing', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'x-negocio-id': profile?.negocio_id || ''
-        },
-        body: JSON.stringify({
-          clienteNombre: clienteNombre,
-          clienteDocumento: clienteDocumento,
-          clienteTipoDoc: clienteTipoDoc,
-          total: total,
-          items: cart.map(item => ({
-            nombre: item.producto.nombre,
-            cantidad: item.cantidad,
-            precio: item.producto.precio_venta,
-            iva: (item.producto as any).porcentaje_iva ?? 19.00
-          }))
-        })
-      })
-
-      // Si retorna 428 Precondition Required, abrir Modal de Configuración DIAN
-      if (response.status === 428) {
-        setIsDianModalOpen(true)
-        toast('Se requiere configuración inicial de credenciales DIAN', { type: 'error' })
-        setCheckoutState('idle')
-        setProcessing(false)
-        return
-      }
-
-      if (!response.ok && response.status !== 202) {
-        const errData = await response.json().catch(() => ({}))
-        throw new Error(errData.error || 'Error en Edge Function fiscal')
-      }
-    } catch (err: any) {
-      console.warn('[DIAN] Omitiendo o falló el envío asíncrono primario de la DIAN:', err.message)
-      toast('Envío DIAN encolado para reintento', { type: 'success', description: 'La caja no se congelará. El comprobante quedará Pendiente.' })
-    }
-
-    // 2. Registrar la venta localmente en el inventario para actualizar stocks y cerrar arqueo
     const result = await checkout(dbPaymentMethod, userName, profile?.negocio_id)
     if (result) {
       setCheckoutState('success')
@@ -198,21 +145,21 @@ export default function POSPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                type="text"
                 placeholder="Buscar por nombre o código de barras..."
-                className="w-full h-8 pl-8 pr-3 text-[13px] border border-gray-200 rounded-md bg-gray-50 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:bg-white transition-colors"
+                className="w-full h-8 pl-8 pr-3 text-[13px] border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-300 bg-white"
               />
             </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            
+            <div className="flex gap-1 overflow-x-auto pb-1 select-none">
               {CATEGORIES.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setCategory(cat)}
                   className={[
-                    'shrink-0 px-2.5 py-1 rounded text-[12px] font-medium transition-colors',
+                    'px-3 py-1 rounded-full text-[11px] font-medium transition-colors shrink-0',
                     category === cat
                       ? 'bg-gray-900 text-white'
-                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700',
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200/70',
                   ].join(' ')}
                 >
                   {cat}
@@ -221,136 +168,112 @@ export default function POSPage() {
             </div>
           </div>
 
-          {/* Product grid */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-              {filtered.map((product) => {
-                const inCart = cart.find((i) => i.producto.id === product.id)
-                return (
+          {/* Products grid */}
+          <div className="flex-1 overflow-y-auto p-5">
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center text-gray-400">
+                <ShoppingBag size={28} className="mb-2 text-gray-300" />
+                <p className="text-[13px] font-medium">No se encontraron productos disponibles</p>
+                <p className="text-[11px] mt-0.5">Verifica el stock o el filtro seleccionado</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                {filtered.map((prod) => (
                   <button
-                    key={product.id}
-                    onClick={() => addToCart(product)}
-                    className={[
-                      'text-left p-3 rounded-lg border transition-all hover:shadow-sm',
-                      inCart
-                        ? 'border-gray-400 bg-white'
-                        : 'border-gray-200 bg-white hover:border-gray-300',
-                    ].join(' ')}
+                    key={prod.id}
+                    onClick={() => addToCart(prod)}
+                    className="flex flex-col text-left p-3.5 bg-white border border-gray-200 rounded-xl hover:border-gray-900 hover:shadow-sm transition-all relative group"
                   >
-                    <div className="flex items-start justify-between gap-1">
-                      <p className="text-[12px] font-medium text-gray-900 leading-tight line-clamp-2">{product.nombre}</p>
-                      {inCart && (
-                        <span className="shrink-0 w-4 h-4 bg-gray-900 rounded-full flex items-center justify-center text-[10px] text-white font-bold">
-                          {inCart.cantidad}
-                        </span>
-                      )}
+                    <div className="absolute top-2 right-2 bg-gray-100 text-gray-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                      {prod.stock_actual} ud
                     </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[13px] font-semibold text-gray-900">
-                        {formatCOP(product.precio_venta)}
-                      </span>
-                      <span className={[
-                        'text-[11px] font-medium',
-                        product.stock_actual < product.stock_minimo ? 'text-amber-600' : 'text-gray-400'
-                      ].join(' ')}>
-                        {product.stock_actual} pza
-                      </span>
+                    <div className="flex-1 min-w-0 pr-6 mt-1">
+                      <p className="text-[12px] font-semibold text-gray-900 group-hover:text-gray-950 truncate">{prod.nombre}</p>
+                      <p className="text-[10px] text-gray-400 font-mono mt-0.5 truncate">{prod.codigo_barras || 'Sin código'}</p>
                     </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{product.categoria}</p>
+                    <p className="text-[13px] font-bold text-gray-900 font-mono mt-3">
+                      {formatCOP(prod.precio_venta)}
+                    </p>
                   </button>
-                )
-              })}
-              {filtered.length === 0 && (
-                <div className="col-span-full py-16 text-center">
-                  <ShoppingBag size={28} className="mx-auto text-gray-300 mb-2" />
-                  <p className="text-[13px] text-gray-400">Sin productos encontrados</p>
-                </div>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Cart panel */}
-        <div className="w-72 xl:w-80 border-l border-gray-200 bg-white flex flex-col shrink-0">
-          <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-            <span className="text-[13px] font-semibold text-gray-900">Carrito</span>
+        {/* Cart / POS Sidebar */}
+        <div className="w-80 shrink-0 border-l border-gray-200 bg-white flex flex-col overflow-hidden">
+          <div className="px-4 py-3.5 border-b border-gray-150 flex items-center justify-between shrink-0">
+            <div>
+              <p className="text-[13px] font-bold text-gray-900">Carrito de Cobro</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">{cart.reduce((a, c) => a + c.cantidad, 0)} artículos en lista</p>
+            </div>
             {cart.length > 0 && (
               <button
                 onClick={clearCart}
-                className="text-[12px] text-gray-400 hover:text-gray-600 transition-colors"
+                className="text-[11px] font-bold text-red-500 hover:text-red-600 transition-colors"
               >
-                Limpiar
+                Limpiar todo
               </button>
             )}
           </div>
 
           {/* Cart items */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
             {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center px-6">
-                <ShoppingBag size={28} className="text-gray-200 mb-2" />
-                <p className="text-[13px] text-gray-400">Selecciona productos para agregar al carrito</p>
+              <div className="flex flex-col items-center justify-center h-full p-6 text-center text-gray-400">
+                <ShoppingBag size={24} className="mb-2 text-gray-300" />
+                <p className="text-[12px] font-medium">El carrito está vacío</p>
+                <p className="text-[11px] mt-0.5">Toca o escanea un producto para cargarlo</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {cart.map((item) => (
-                  <div key={item.producto.id} className="px-4 py-2.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-[12px] font-medium text-gray-900 leading-snug flex-1">
-                        {item.producto.nombre}
-                      </p>
+              cart.map((item) => (
+                <div key={item.producto.id} className="p-4 flex items-start gap-3 hover:bg-gray-50/50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-semibold text-gray-900 truncate">{item.producto.nombre}</p>
+                    <p className="text-[11px] text-gray-400 font-mono mt-0.5">{formatCOP(item.producto.precio_venta)} c/u</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <div className="flex items-center border border-gray-200 rounded-md bg-white overflow-hidden h-6">
                       <button
-                        onClick={() => removeFromCart(item.producto.id)}
-                        className="p-0.5 text-gray-300 hover:text-gray-500 transition-colors shrink-0"
+                        onClick={() => updateQty(item.producto.id, item.cantidad - 1)}
+                        className="px-1.5 hover:bg-gray-50 text-gray-500 h-full flex items-center justify-center"
                       >
-                        <X size={13} />
+                        <Minus size={10} />
+                      </button>
+                      <span className="w-7 text-center text-[11px] font-bold font-mono text-gray-800">{item.cantidad}</span>
+                      <button
+                        onClick={() => updateQty(item.producto.id, item.cantidad + 1)}
+                        disabled={item.cantidad >= item.producto.stock_actual}
+                        className="px-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 h-full flex items-center justify-center"
+                      >
+                        <Plus size={10} />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => updateQty(item.producto.id, -1)}
-                          className="w-5 h-5 rounded border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors"
-                        >
-                          <Minus size={10} />
-                        </button>
-                        <span className="text-[12px] font-medium w-5 text-center">{item.cantidad}</span>
-                        <button
-                          onClick={() => updateQty(item.producto.id, 1)}
-                          disabled={item.cantidad >= item.producto.stock_actual}
-                          className="w-5 h-5 rounded border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-30 transition-colors"
-                        >
-                          <Plus size={10} />
-                        </button>
-                      </div>
-                      <span className="text-[12px] font-semibold text-gray-900">
-                        {formatCOP(item.producto.precio_venta * item.cantidad)}
-                      </span>
-                    </div>
+                    <button
+                      onClick={() => removeFromCart(item.producto.id)}
+                      className="text-[10px] text-gray-400 hover:text-red-500 font-semibold transition-colors flex items-center gap-0.5"
+                    >
+                      <Trash2 size={10} />
+                      Quitar
+                    </button>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))
             )}
           </div>
 
-          {/* Error handling */}
-          {error && (
-            <div className="px-4 py-2 bg-red-50 text-red-600 text-[11px] border-t border-red-100">
-              {error}
-            </div>
-          )}
-
-          {/* Totals + checkout */}
+          {/* Pricing calculations & checkout triggers */}
           {cart.length > 0 && checkoutState === 'idle' && (
-            <div className="border-t border-gray-200 px-4 py-3 space-y-3">
-              <div className="space-y-1 text-[12px]">
+            <div className="border-t border-gray-150 px-4 py-4 space-y-4 shrink-0">
+              <div className="space-y-1.5 text-[12px]">
                 <div className="flex justify-between text-gray-500">
                   <span>Subtotal</span>
-                  <span>{formatCOP(subtotal)}</span>
+                  <span className="font-mono">{formatCOP(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-gray-500">
-                  <span>IVA total</span>
-                  <span>{formatCOP(tax)}</span>
+                  <span>IVA estimado</span>
+                  <span className="font-mono">{formatCOP(tax)}</span>
                 </div>
                 <div className="flex justify-between font-semibold text-gray-900 text-[14px] pt-1 border-t border-gray-100">
                   <span>Total</span>
@@ -439,53 +362,11 @@ export default function POSPage() {
                 <Check size={20} className="text-white" />
               </div>
               <p className="text-[13px] font-medium text-gray-900">Venta procesada</p>
-              <p className="text-[12px] text-gray-400">Stock y comprobante encolado en la DIAN</p>
+              <p className="text-[12px] text-gray-400">Stock actualizado en Supabase</p>
             </div>
           )}
-
-          {/* Billing metadata for electronic invoicing */}
-          <div className="border-t border-gray-150 bg-gray-50/50 px-4 py-3 space-y-2">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Datos de Facturación DIAN</p>
-            <div className="space-y-1.5">
-              <div className="flex gap-1.5">
-                <select
-                  value={clienteTipoDoc}
-                  onChange={(e) => setClienteTipoDoc(e.target.value)}
-                  className="h-8 border border-gray-200 rounded-md text-[11px] bg-white px-2 focus:outline-none"
-                >
-                  <option value="13">C.C.</option>
-                  <option value="31">NIT</option>
-                  <option value="22">C.E.</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Documento/NIT (222222222222)"
-                  value={clienteDocumento === '222222222222' ? '' : clienteDocumento}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setClienteDocumento(val || '222222222222');
-                    if (!val) setClienteNombre('Consumidor Final');
-                  }}
-                  className="flex-1 h-8 px-2 border border-gray-200 rounded-md text-[11px] focus:outline-none bg-white font-mono"
-                />
-              </div>
-              <input
-                type="text"
-                placeholder="Nombre del Cliente (Consumidor Final)"
-                value={clienteNombre === 'Consumidor Final' ? '' : clienteNombre}
-                onChange={(e) => setClienteNombre(e.target.value || 'Consumidor Final')}
-                className="w-full h-8 px-2 border border-gray-200 rounded-md text-[11px] focus:outline-none bg-white"
-              />
-            </div>
-          </div>
         </div>
       </div>
-      
-      {/* DIAN Habilitación & Producción config Modal wrapper */}
-      <DianConfigModal
-        isOpen={isDianModalOpen}
-        onClose={() => setIsDianModalOpen(false)}
-      />
     </MainLayout>
   )
 }
