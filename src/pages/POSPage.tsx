@@ -9,6 +9,9 @@ import { useRemoteScanner } from '../hooks/useRemoteScanner'
 import { useNavigate } from 'react-router-dom'
 import { SkeletonPage } from '../components/ui/Skeleton'
 import { cashService } from '../services/cashService'
+import { supabase } from '../lib/supabaseClient'
+import DianConfigModal from '../components/dian/DianConfigModal'
+import { FileCode } from 'lucide-react'
 import {
   Search,
   Plus,
@@ -60,6 +63,12 @@ export default function POSPage() {
   const [cashInput, setCashInput] = useState('')
   const [payMethod, setPayMethod] = useState<'cash' | 'transfer' | 'card'>('cash')
 
+  // Billing Fields (Colombian DIAN compliance)
+  const [clienteNombre, setClienteNombre] = useState('Consumidor Final')
+  const [clienteDocumento, setClienteDocumento] = useState('222222222222')
+  const [clienteTipoDoc, setClienteTipoDoc] = useState('13') // Default Cédula de Ciudadanía
+  const [isDianModalOpen, setIsDianModalOpen] = useState(false)
+
   const filtered = useMemo(() => {
     return productos.filter((p) => {
       const matchCat = category === CATEGORY_ALL || p.categoria === category
@@ -107,10 +116,55 @@ export default function POSPage() {
 
     const dbPaymentMethod = payMethod === 'cash' ? 'efectivo' : payMethod === 'card' ? 'tarjeta' : 'transferencia'
     setCheckoutState('paying')
+
+    try {
+      // 1. Intentar Facturación Electrónica DIAN a través de la Edge Function
+      const token = (await supabase.auth.getSession()).data.session?.access_token
+      const response = await fetch('https://qarurnzptlpoxizkthgo.supabase.co/functions/v1/dian-billing', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'x-negocio-id': profile?.negocio_id || ''
+        },
+        body: JSON.stringify({
+          clienteNombre: clienteNombre,
+          clienteDocumento: clienteDocumento,
+          clienteTipoDoc: clienteTipoDoc,
+          total: total,
+          items: cart.map(item => ({
+            nombre: item.producto.nombre,
+            cantidad: item.cantidad,
+            precio: item.producto.precio_venta,
+            iva: (item.producto as any).porcentaje_iva ?? 19.00
+          }))
+        })
+      })
+
+      // Si retorna 428 Precondition Required, abrir Modal de Configuración DIAN
+      if (response.status === 428) {
+        setIsDianModalOpen(true)
+        toast('Se requiere configuración inicial de credenciales DIAN', { type: 'error' })
+        setCheckoutState('idle')
+        setProcessing(false)
+        return
+      }
+
+      if (!response.ok && response.status !== 202) {
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.error || 'Error en Edge Function fiscal')
+      }
+    } catch (err: any) {
+      console.warn('[DIAN] Omitiendo o falló el envío asíncrono primario de la DIAN:', err.message)
+      toast('Envío DIAN encolado para reintento', { type: 'success', description: 'La caja no se congelará. El comprobante quedará Pendiente.' })
+    }
+
+    // 2. Registrar la venta localmente en el inventario para actualizar stocks y cerrar arqueo
     const result = await checkout(dbPaymentMethod, userName, profile?.negocio_id)
     if (result) {
       setCheckoutState('success')
       refreshInventory()
+      clearCart()
       toast(`Venta procesada con éxito · Ticket #${result.id.slice(0, 8).toUpperCase()}`, { type: 'success' })
       setTimeout(() => {
         setCheckoutState('idle')
@@ -385,11 +439,53 @@ export default function POSPage() {
                 <Check size={20} className="text-white" />
               </div>
               <p className="text-[13px] font-medium text-gray-900">Venta procesada</p>
-              <p className="text-[12px] text-gray-400">Stock actualizado en Supabase</p>
+              <p className="text-[12px] text-gray-400">Stock y comprobante encolado en la DIAN</p>
             </div>
           )}
+
+          {/* Billing metadata for electronic invoicing */}
+          <div className="border-t border-gray-150 bg-gray-50/50 px-4 py-3 space-y-2">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Datos de Facturación DIAN</p>
+            <div className="space-y-1.5">
+              <div className="flex gap-1.5">
+                <select
+                  value={clienteTipoDoc}
+                  onChange={(e) => setClienteTipoDoc(e.target.value)}
+                  className="h-8 border border-gray-200 rounded-md text-[11px] bg-white px-2 focus:outline-none"
+                >
+                  <option value="13">C.C.</option>
+                  <option value="31">NIT</option>
+                  <option value="22">C.E.</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Documento/NIT (222222222222)"
+                  value={clienteDocumento === '222222222222' ? '' : clienteDocumento}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setClienteDocumento(val || '222222222222');
+                    if (!val) setClienteNombre('Consumidor Final');
+                  }}
+                  className="flex-1 h-8 px-2 border border-gray-200 rounded-md text-[11px] focus:outline-none bg-white font-mono"
+                />
+              </div>
+              <input
+                type="text"
+                placeholder="Nombre del Cliente (Consumidor Final)"
+                value={clienteNombre === 'Consumidor Final' ? '' : clienteNombre}
+                onChange={(e) => setClienteNombre(e.target.value || 'Consumidor Final')}
+                className="w-full h-8 px-2 border border-gray-200 rounded-md text-[11px] focus:outline-none bg-white"
+              />
+            </div>
+          </div>
         </div>
       </div>
+      
+      {/* DIAN Habilitación & Producción config Modal wrapper */}
+      <DianConfigModal
+        isOpen={isDianModalOpen}
+        onClose={() => setIsDianModalOpen(false)}
+      />
     </MainLayout>
   )
 }

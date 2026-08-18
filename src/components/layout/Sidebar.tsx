@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Settings,
   Store,
+  FileCode,
 } from 'lucide-react'
 
 const nav = [
@@ -20,6 +21,7 @@ const nav = [
   { to: '/caja', icon: Wallet, label: 'Arqueo de Caja', adminOnly: false },
   { to: '/historial-caja', icon: History, label: 'Historial de Cajas', adminOnly: false },
   { to: '/compras', icon: ShoppingBag, label: 'Compras', adminOnly: true },
+  { to: '/comprobantes', icon: FileCode, label: 'Comprobantes de Venta', adminOnly: true },
   { to: '/reportes', icon: BarChart3, label: 'Informes', adminOnly: true },
   { to: '/Gestion detallada de inventario', icon: ClipboardList, label: 'Auditoría Física', adminOnly: true },
   { to: '/auditoria', icon: ClipboardList, label: 'Logs del Sistema', adminOnly: true },

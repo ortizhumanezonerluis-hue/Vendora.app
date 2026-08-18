@@ -13,6 +13,7 @@ import AuditLogsPage from './pages/AuditLogsPage'
 import SettingsPage from './pages/SettingsPage'
 import AuditPage from './pages/AuditPage'
 import ScannerAppPage from './pages/ScannerAppPage'
+import ComprobantesPage from './pages/ComprobantesPage'
 import { Toaster } from './components/ui/Toaster'
 
 export default function App() {
@@ -114,6 +115,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/comprobantes"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <ComprobantesPage />
               </ProtectedRoute>
             }
           />
