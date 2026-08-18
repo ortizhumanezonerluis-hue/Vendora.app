@@ -59,52 +59,38 @@ export default function Sidebar() {
     : 'US'
 
   return (
-    <aside className="flex flex-col w-60 min-h-screen border-r border-gray-200 bg-white shrink-0 transition-all duration-300 select-none">
+    <aside className="flex flex-col w-56 min-h-screen border-r border-gray-200 bg-white shrink-0 transition-all duration-300 select-none">
       
-      {/* Dynamic Header */}
-      {isAccountingMode ? (
-        <div className="px-3 h-14 border-b border-gray-200 flex items-center justify-between bg-gray-50/50 animate-in fade-in duration-200">
-          <button
-            onClick={() => navigate('/pos')}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-gray-700 hover:text-gray-950 hover:bg-gray-200/60 border border-gray-200 bg-white shadow-xs transition-all"
-            title="Regresar a la aplicación principal"
-          >
-            <ArrowLeft size={13} className="text-gray-600" />
-            <span>Volver a la App</span>
-          </button>
-          <div className="flex items-center gap-1.5 text-gray-800">
-            <Scale size={15} className="text-gray-900" />
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2.5 px-4 h-14 border-b border-gray-200">
-          <div className="w-6 h-6 bg-gray-900 rounded flex items-center justify-center">
-            <Store size={13} className="text-white" />
-          </div>
-          <div className="flex flex-col">
+      {/* Top Header: Clean and unified */}
+      <div className="flex items-center justify-between px-3 h-14 border-b border-gray-200 shrink-0">
+        {isAccountingMode ? (
+          <>
+            <button
+              onClick={() => navigate('/pos')}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-gray-700 hover:text-gray-950 hover:bg-gray-100 transition-colors"
+              title="Regresar a la aplicación principal"
+            >
+              <ArrowLeft size={14} className="text-gray-500" />
+              <span>Volver a la App</span>
+            </button>
+            <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center text-gray-800">
+              <Scale size={14} />
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-2.5 px-1">
+            <div className="w-6 h-6 bg-gray-900 rounded flex items-center justify-center">
+              <Store size={13} className="text-white" />
+            </div>
             <span className="font-semibold text-[13px] tracking-tight text-gray-900 leading-none">Vendora</span>
-            <span className="text-[10px] text-gray-400 font-medium mt-0.5">Gestión de Comercio</span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Mode Sub-header banner when in accounting */}
-      {isAccountingMode && (
-        <div className="px-4 py-2.5 bg-gray-900 text-white flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-bold tracking-wide uppercase">Contabilidad</p>
-            <p className="text-[9px] text-gray-300 font-medium">Régimen Simplificado</p>
-          </div>
-          <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded text-[9px] font-bold">
-            Resp. 52
-          </span>
-        </div>
-      )}
-
-      {/* Navigation Links */}
+      {/* Navigation Links with standard clean styles */}
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
         {isAccountingMode ? (
-          <div className="space-y-0.5 animate-in fade-in slide-in-from-left-1 duration-200">
+          <div className="space-y-0.5 animate-in fade-in duration-150">
             {accountingNav.map(({ to, icon: Icon, label }) => {
               const active = location.pathname === to
               return (
@@ -112,37 +98,39 @@ export default function Sidebar() {
                   key={to}
                   to={to}
                   className={[
-                    'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[12px] font-medium transition-all',
+                    'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
                     active
-                      ? 'bg-gray-900 text-white font-semibold shadow-xs'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                      ? 'bg-gray-100 text-gray-900 font-semibold'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
                   ].join(' ')}
                 >
-                  <Icon size={14} className={active ? 'text-white' : 'text-gray-400'} />
+                  <Icon size={15} className={active ? 'text-gray-900' : 'text-gray-400'} />
                   {label}
                 </NavLink>
               )
             })}
           </div>
         ) : (
-          visibleMainNav.map(({ to, icon: Icon, label }) => {
-            const active = location.pathname.startsWith(to) || (label === 'Contabilidad' && location.pathname.startsWith('/contabilidad'))
-            return (
-              <NavLink
-                key={to}
-                to={to}
-                className={[
-                  'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
-                  active
-                    ? 'bg-gray-100 text-gray-900 font-semibold'
-                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
-                ].join(' ')}
-              >
-                <Icon size={15} className={active ? 'text-gray-900' : 'text-gray-400'} />
-                {label}
-              </NavLink>
-            )
-          })
+          <div className="space-y-0.5 animate-in fade-in duration-150">
+            {visibleMainNav.map(({ to, icon: Icon, label }) => {
+              const active = location.pathname.startsWith(to) || (label === 'Contabilidad' && location.pathname.startsWith('/contabilidad'))
+              return (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={[
+                    'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
+                    active
+                      ? 'bg-gray-100 text-gray-900 font-semibold'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+                  ].join(' ')}
+                >
+                  <Icon size={15} className={active ? 'text-gray-900' : 'text-gray-400'} />
+                  {label}
+                </NavLink>
+              )
+            })}
+          </div>
         )}
       </nav>
 

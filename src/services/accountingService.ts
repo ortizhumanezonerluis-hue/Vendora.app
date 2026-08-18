@@ -2,7 +2,8 @@ import { supabase } from '../lib/supabaseClient'
 
 export interface RutConfig {
   id?: string
-  tenant_id: string
+  negocio_id: string
+  tenant_id?: string
   nit: string
   dv: string
   razon_social: string
@@ -21,6 +22,7 @@ export interface RutConfig {
 
 export interface LibroFiscalItem {
   id: string
+  negocio_id: string
   tenant_id?: string
   fecha: string
   concepto: string
@@ -35,6 +37,7 @@ export interface LibroFiscalItem {
 
 export interface CostoSoportado {
   id: string
+  negocio_id: string
   tenant_id?: string
   fecha: string
   proveedor_nombre: string
@@ -52,6 +55,7 @@ export interface CostoSoportado {
 
 export interface ExtractoBancario {
   id: string
+  negocio_id: string
   tenant_id?: string
   fecha: string
   entidad: 'Nequi' | 'Daviplata' | 'Bancolombia' | 'Datafono' | 'Otro'
@@ -65,6 +69,7 @@ export interface ExtractoBancario {
 
 export interface PagoMenor {
   id: string
+  negocio_id: string
   tenant_id?: string
   fecha: string
   concepto: string
@@ -77,52 +82,59 @@ export interface PagoMenor {
   creado_en?: string
 }
 
-// Fallback storage keys for offline resilience
-const STORAGE_KEYS = {
-  RUT: 'vendora_acc_rut',
-  LIBRO_FISCAL: 'vendora_acc_libro',
-  COSTOS: 'vendora_acc_costos',
-  EXTRACTOS: 'vendora_acc_extractos',
-  PAGOS_MENORES: 'vendora_acc_pagos_menores'
-}
-
 export const accountingService = {
   // ==========================================
-  // 1. RUT CONFIGURATION
+  // 1. RUT CONFIGURATION (Conectado a BD)
   // ==========================================
-  async getRutConfig(tenantId: string): Promise<RutConfig> {
+  async getRutConfig(negocioId: string): Promise<RutConfig> {
     try {
       const { data, error } = await supabase
         .from('rut_config')
         .select('*')
-        .eq('tenant_id', tenantId)
+        .eq('negocio_id', negocioId)
         .limit(1)
         .maybeSingle()
 
       if (data) return data
     } catch (e) {
-      console.warn('Usando almacenamiento local para RUT:', e)
+      console.warn('Error leyendo rut_config de Supabase:', e)
     }
 
-    const saved = localStorage.getItem(`${STORAGE_KEYS.RUT}_${tenantId}`)
-    if (saved) {
-      try { return JSON.parse(saved) } catch (_) {}
-    }
+    // Fallback: load business info from configuracion_negocio
+    let storeName = ''
+    let storeAddress = ''
+    let storePhone = ''
+    let rfc = ''
 
-    // Default configuration for Colombian No Responsable de IVA
+    try {
+      const { data: storeData } = await supabase
+        .from('configuracion_negocio')
+        .select('nombre, direccion, telefono, rfc')
+        .eq('negocio_id', negocioId)
+        .limit(1)
+        .maybeSingle()
+
+      if (storeData) {
+        storeName = storeData.nombre || ''
+        storeAddress = storeData.direccion || ''
+        storePhone = storeData.telefono || ''
+        rfc = storeData.rfc || ''
+      }
+    } catch (_) {}
+
     return {
-      tenant_id: tenantId,
-      nit: '900.123.456',
-      dv: '7',
-      razon_social: "Tienda La Bendición - Régimen Simplificado",
-      nombre_comercial: "Vendora Store",
+      negocio_id: negocioId,
+      nit: rfc || '',
+      dv: '0',
+      razon_social: storeName || 'Nombre del Negocio',
+      nombre_comercial: storeName || '',
       actividad_ciiu: '4711 - Comercio al por menor en establecimientos no especializados',
-      responsabilidades: ['52 - No responsable de IVA (Art. 437 E.T.)', '49 - No responsable de INC'],
-      correo_fiscal: 'contacto@vendora.com',
-      telefono_fiscal: '3009797523',
-      departamento: 'Córdoba',
-      ciudad: 'Cereté',
-      direccion_fiscal: 'CLL 89-98 Cereté - Córdoba',
+      responsabilidades: ['52 - No responsable de IVA (Art. 437 E.T.)'],
+      correo_fiscal: '',
+      telefono_fiscal: storePhone || '',
+      departamento: '',
+      ciudad: '',
+      direccion_fiscal: storeAddress || '',
       estado_verificacion: 'vigente',
       actualizado_en: new Date().toISOString()
     }
@@ -130,61 +142,105 @@ export const accountingService = {
 
   async saveRutConfig(config: RutConfig): Promise<RutConfig> {
     const payload = {
-      ...config,
+      negocio_id: config.negocio_id,
+      tenant_id: config.negocio_id,
+      nit: config.nit,
+      dv: config.dv,
+      razon_social: config.razon_social,
+      nombre_comercial: config.nombre_comercial || '',
+      actividad_ciiu: config.actividad_ciiu,
+      responsabilidades: config.responsabilidades,
+      correo_fiscal: config.correo_fiscal || '',
+      telefono_fiscal: config.telefono_fiscal || '',
+      direccion_fiscal: config.direccion_fiscal || '',
+      ciudad: config.ciudad || '',
+      departamento: config.departamento || '',
+      pdf_url: config.pdf_url || '',
+      estado_verificacion: config.estado_verificacion || 'vigente',
       actualizado_en: new Date().toISOString()
     }
 
-    try {
-      const { data, error } = await supabase
+    // Check if record exists
+    const { data: existing } = await supabase
+      .from('rut_config')
+      .select('id')
+      .eq('negocio_id', config.negocio_id)
+      .limit(1)
+      .maybeSingle()
+
+    let res
+    if (existing?.id) {
+      res = await supabase
         .from('rut_config')
-        .upsert([payload], { onConflict: 'tenant_id' })
+        .update(payload)
+        .eq('id', existing.id)
         .select()
         .single()
-
-      if (!error && data) {
-        localStorage.setItem(`${STORAGE_KEYS.RUT}_${config.tenant_id}`, JSON.stringify(data))
-        return data
-      }
-    } catch (e) {
-      console.warn('Guardando RUT en storage local:', e)
+    } else {
+      res = await supabase
+        .from('rut_config')
+        .insert([payload])
+        .select()
+        .single()
     }
 
-    localStorage.setItem(`${STORAGE_KEYS.RUT}_${config.tenant_id}`, JSON.stringify(payload))
-    return payload
+    if (res.error) throw res.error
+    return res.data
+  },
+
+  // Calculate actual annual gross sales from database
+  async getAnnualGrossSales(negocioId: string): Promise<number> {
+    try {
+      const currentYear = new Date().getFullYear()
+      const startDate = `${currentYear}-01-01T00:00:00.000Z`
+      const endDate = `${currentYear}-12-31T23:59:59.999Z`
+
+      const { data, error } = await supabase
+        .from('ventas')
+        .select('total')
+        .eq('negocio_id', negocioId)
+        .gte('fecha', startDate)
+        .lte('fecha', endDate)
+
+      if (error || !data) return 0
+      return data.reduce((sum, v) => sum + (Number(v.total) || 0), 0)
+    } catch (e) {
+      console.warn('Error calculando ventas anuales:', e)
+      return 0
+    }
   },
 
   // ==========================================
   // 2. LIBRO FISCAL DE OPERACIONES DIARIAS
   // ==========================================
-  async getLibroFiscal(tenantId: string): Promise<LibroFiscalItem[]> {
+  async getLibroFiscal(negocioId: string): Promise<LibroFiscalItem[]> {
     let dbItems: LibroFiscalItem[] = []
 
     try {
       const { data, error } = await supabase
         .from('libro_fiscal_registros')
         .select('*')
-        .eq('tenant_id', tenantId)
+        .eq('negocio_id', negocioId)
         .order('fecha', { ascending: false })
 
       if (!error && data) dbItems = data
     } catch (e) {
-      console.warn('Error leyendo libro_fiscal_registros de Supabase:', e)
+      console.warn('Error leyendo libro_fiscal_registros:', e)
     }
 
-    // Also fetch automatic daily entries from POS sales (ventas)
+    // Automatic entries from POS sales (ventas)
     try {
       const { data: sales } = await supabase
         .from('ventas')
         .select('id, fecha, total, cajero, usuario_id')
-        .eq('negocio_id', tenantId)
+        .eq('negocio_id', negocioId)
         .order('fecha', { ascending: false })
-        .limit(300)
+        .limit(500)
 
       if (sales && sales.length > 0) {
-        // Group sales by day
         const salesByDay: Record<string, { total: number; count: number; refs: string[] }> = {}
         sales.forEach(s => {
-          const day = s.fecha.split('T')[0]
+          const day = s.fecha ? s.fecha.split('T')[0] : new Date().toISOString().split('T')[0]
           if (!salesByDay[day]) {
             salesByDay[day] = { total: 0, count: 0, refs: [] }
           }
@@ -193,45 +249,44 @@ export const accountingService = {
           salesByDay[day].refs.push(s.id.slice(0, 6).toUpperCase())
         })
 
-        // Merge with existing entries (avoid duplicate POS entries for same day)
         Object.entries(salesByDay).forEach(([day, info]) => {
           const exists = dbItems.some(i => i.fecha === day && i.origen === 'pos')
           if (!exists) {
             dbItems.push({
               id: `pos-auto-${day}`,
-              tenant_id: tenantId,
+              negocio_id: negocioId,
               fecha: day,
-              concepto: `Ventas globales del día (POS - ${info.count} tickets)`,
+              concepto: `Ventas globales del día (${info.count} tickets)`,
               tipo: 'ingreso',
               origen: 'pos',
-              comprobante_ref: `Tickets: #${info.refs.slice(0, 3).join(', #')}...`,
+              comprobante_ref: `Tickets #${info.refs.slice(0, 3).join(', #')}...`,
               valor_ingreso: info.total,
               valor_egreso: 0,
-              observaciones: 'Ingreso global diario generado automáticamente desde el punto de venta'
+              observaciones: 'Ingreso global diario sincronizado desde el punto de venta'
             })
           }
         })
       }
     } catch (e) {
-      console.warn('Error agregando ventas automáticas al libro fiscal:', e)
+      console.warn('Error agregando ventas del POS:', e)
     }
 
-    // Also sync received purchase orders (ordenes_compra)
+    // Automatic entries from received purchase orders (ordenes_compra)
     try {
       const { data: orders } = await supabase
         .from('ordenes_compra')
         .select('id, codigo, fecha, costo_total, estado, proveedores(nombre)')
-        .eq('negocio_id', tenantId)
+        .eq('negocio_id', negocioId)
         .eq('estado', 'recibida')
 
       if (orders && orders.length > 0) {
         orders.forEach((ord: any) => {
-          const day = ord.fecha.split('T')[0]
+          const day = ord.fecha ? ord.fecha.split('T')[0] : new Date().toISOString().split('T')[0]
           const exists = dbItems.some(i => i.comprobante_ref === ord.codigo || i.id === `oc-${ord.id}`)
           if (!exists) {
             dbItems.push({
               id: `oc-${ord.id}`,
-              tenant_id: tenantId,
+              negocio_id: negocioId,
               fecha: day,
               concepto: `Compra de mercancía - ${ord.proveedores?.nombre || 'Proveedor'}`,
               tipo: 'egreso',
@@ -245,337 +300,203 @@ export const accountingService = {
         })
       }
     } catch (e) {
-      console.warn('Error agregando compras automáticas al libro fiscal:', e)
-    }
-
-    // If still empty, provide sample starting records
-    if (dbItems.length === 0) {
-      const sample = [
-        {
-          id: 'sample-1',
-          tenant_id: tenantId,
-          fecha: new Date().toISOString().split('T')[0],
-          concepto: 'Ventas globales del día (POS)',
-          tipo: 'ingreso' as const,
-          origen: 'pos' as const,
-          comprobante_ref: 'Tickets #5642-#5648',
-          valor_ingreso: 450000,
-          valor_egreso: 0,
-          observaciones: 'Operación diaria en local comercial'
-        },
-        {
-          id: 'sample-2',
-          tenant_id: tenantId,
-          fecha: new Date().toISOString().split('T')[0],
-          concepto: 'Compra de víveres y abarrotes mayorista',
-          tipo: 'egreso' as const,
-          origen: 'manual' as const,
-          comprobante_ref: 'FAC-9921',
-          valor_ingreso: 0,
-          valor_egreso: 185000,
-          observaciones: 'Factura electrónica recibida con soporte'
-        }
-      ]
-      dbItems = sample
+      console.warn('Error agregando compras al libro fiscal:', e)
     }
 
     return dbItems.sort((a, b) => b.fecha.localeCompare(a.fecha))
   },
 
   async addLibroFiscalItem(item: Omit<LibroFiscalItem, 'id'>): Promise<LibroFiscalItem> {
-    try {
-      const { data, error } = await supabase
-        .from('libro_fiscal_registros')
-        .insert([item])
-        .select()
-        .single()
-
-      if (!error && data) return data
-    } catch (e) {
-      console.warn('Guardando registro fiscal localmente:', e)
+    const payload = {
+      negocio_id: item.negocio_id,
+      tenant_id: item.negocio_id,
+      fecha: item.fecha,
+      concepto: item.concepto,
+      tipo: item.tipo,
+      origen: item.origen || 'manual',
+      comprobante_ref: item.comprobante_ref || null,
+      valor_ingreso: item.valor_ingreso || 0,
+      valor_egreso: item.valor_egreso || 0,
+      observaciones: item.observaciones || null
     }
 
-    const newItem: LibroFiscalItem = {
-      ...item,
-      id: 'lf-' + Date.now()
-    }
-    return newItem
+    const { data, error } = await supabase
+      .from('libro_fiscal_registros')
+      .insert([payload])
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
   },
 
   async updateLibroFiscalItem(id: string, updates: Partial<LibroFiscalItem>): Promise<void> {
-    try {
-      await supabase
-        .from('libro_fiscal_registros')
-        .update(updates)
-        .eq('id', id)
-    } catch (e) {
-      console.warn('Error actualizando en BD:', e)
-    }
+    const { error } = await supabase
+      .from('libro_fiscal_registros')
+      .update(updates)
+      .eq('id', id)
+
+    if (error) throw error
   },
 
   async deleteLibroFiscalItem(id: string): Promise<void> {
-    try {
-      await supabase
-        .from('libro_fiscal_registros')
-        .delete()
-        .eq('id', id)
-    } catch (e) {
-      console.warn('Error eliminando en BD:', e)
-    }
+    const { error } = await supabase
+      .from('libro_fiscal_registros')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
   },
 
   // ==========================================
   // 3. COSTOS SOPORTADOS (FACTURAS PROVEEDOR)
   // ==========================================
-  async getCostosSoportados(tenantId: string): Promise<CostoSoportado[]> {
-    try {
-      const { data, error } = await supabase
-        .from('costos_soportados')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('fecha', { ascending: false })
+  async getCostosSoportados(negocioId: string): Promise<CostoSoportado[]> {
+    const { data, error } = await supabase
+      .from('costos_soportados')
+      .select('*')
+      .eq('negocio_id', negocioId)
+      .order('fecha', { ascending: false })
 
-      if (!error && data && data.length > 0) return data
-    } catch (e) {
-      console.warn('Error leyendo costos soportados de Supabase:', e)
+    if (error) {
+      console.warn('Error leyendo costos soportados:', error)
+      return []
     }
-
-    const saved = localStorage.getItem(`${STORAGE_KEYS.COSTOS}_${tenantId}`)
-    if (saved) {
-      try { return JSON.parse(saved) } catch (_) {}
-    }
-
-    return [
-      {
-        id: 'cs-1',
-        tenant_id: tenantId,
-        fecha: '2026-08-15',
-        proveedor_nombre: 'Distribuidora Lácteos del Sinú S.A.S.',
-        proveedor_nit: '900.554.120-1',
-        numero_factura: 'FE-88402',
-        subtotal: 320000,
-        iva: 60800,
-        total: 380800,
-        estado: 'validado',
-        pdf_url: '#',
-        xml_url: '#',
-        notas: 'Factura electrónica validada ante la DIAN'
-      },
-      {
-        id: 'cs-2',
-        tenant_id: tenantId,
-        fecha: '2026-08-12',
-        proveedor_nombre: 'Agua Pool de Colombia',
-        proveedor_nit: '800.112.445-9',
-        numero_factura: 'AP-10294',
-        subtotal: 150000,
-        iva: 0,
-        total: 150000,
-        estado: 'validado',
-        pdf_url: '#',
-        xml_url: '#',
-        notas: 'Agua envasada exenta de IVA'
-      }
-    ]
+    return data || []
   },
 
   async addCostoSoportado(costo: Omit<CostoSoportado, 'id'>): Promise<CostoSoportado> {
-    try {
-      const { data, error } = await supabase
-        .from('costos_soportados')
-        .insert([costo])
-        .select()
-        .single()
-
-      if (!error && data) return data
-    } catch (e) {
-      console.warn('Error guardando costo soportado en Supabase:', e)
+    const payload = {
+      negocio_id: costo.negocio_id,
+      tenant_id: costo.negocio_id,
+      fecha: costo.fecha,
+      proveedor_nombre: costo.proveedor_nombre,
+      proveedor_nit: costo.proveedor_nit,
+      numero_factura: costo.numero_factura,
+      subtotal: costo.subtotal,
+      iva: costo.iva,
+      total: costo.total,
+      estado: costo.estado || 'validado',
+      pdf_url: costo.pdf_url || '',
+      xml_url: costo.xml_url || '',
+      notas: costo.notas || null
     }
 
-    const newItem: CostoSoportado = {
-      ...costo,
-      id: 'cs-' + Date.now()
-    }
-    return newItem
+    const { data, error } = await supabase
+      .from('costos_soportados')
+      .insert([payload])
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
   },
 
   async deleteCostoSoportado(id: string): Promise<void> {
-    try {
-      await supabase.from('costos_soportados').delete().eq('id', id)
-    } catch (e) {
-      console.warn('Error eliminando costo soportado:', e)
-    }
+    const { error } = await supabase
+      .from('costos_soportados')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
   },
 
   // ==========================================
   // 4. EXTRACTOS BANCARIOS CONCILIADOS
   // ==========================================
-  async getExtractosBancarios(tenantId: string): Promise<ExtractoBancario[]> {
-    try {
-      const { data, error } = await supabase
-        .from('extractos_bancarios')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('fecha', { ascending: false })
+  async getExtractosBancarios(negocioId: string): Promise<ExtractoBancario[]> {
+    const { data, error } = await supabase
+      .from('extractos_bancarios')
+      .select('*')
+      .eq('negocio_id', negocioId)
+      .order('fecha', { ascending: false })
 
-      if (!error && data && data.length > 0) return data
-    } catch (e) {
-      console.warn('Error leyendo extractos de Supabase:', e)
+    if (error) {
+      console.warn('Error leyendo extractos bancarios:', error)
+      return []
     }
-
-    const saved = localStorage.getItem(`${STORAGE_KEYS.EXTRACTOS}_${tenantId}`)
-    if (saved) {
-      try { return JSON.parse(saved) } catch (_) {}
-    }
-
-    return [
-      {
-        id: 'eb-1',
-        tenant_id: tenantId,
-        fecha: '2026-08-16',
-        entidad: 'Nequi',
-        referencia: 'M-9948201',
-        monto_banco: 180000,
-        monto_pos: 180000,
-        estado: 'conciliado',
-        notas: 'Transferencias QR Nequi coincidentes con arqueo'
-      },
-      {
-        id: 'eb-2',
-        tenant_id: tenantId,
-        fecha: '2026-08-15',
-        entidad: 'Daviplata',
-        referencia: 'DP-330192',
-        monto_banco: 95000,
-        monto_pos: 95000,
-        estado: 'conciliado',
-        notas: 'Pago con Daviplata validado'
-      },
-      {
-        id: 'eb-3',
-        tenant_id: tenantId,
-        fecha: '2026-08-14',
-        entidad: 'Bancolombia',
-        referencia: 'TR-77210',
-        monto_banco: 250000,
-        monto_pos: 250000,
-        estado: 'conciliado',
-        notas: 'Transferencia directa a cuenta de ahorros'
-      }
-    ]
+    return data || []
   },
 
   async addExtracto(item: Omit<ExtractoBancario, 'id'>): Promise<ExtractoBancario> {
-    try {
-      const { data, error } = await supabase
-        .from('extractos_bancarios')
-        .insert([item])
-        .select()
-        .single()
-
-      if (!error && data) return data
-    } catch (e) {
-      console.warn('Error guardando extracto en Supabase:', e)
+    const payload = {
+      negocio_id: item.negocio_id,
+      tenant_id: item.negocio_id,
+      fecha: item.fecha,
+      entidad: item.entidad,
+      referencia: item.referencia,
+      monto_banco: item.monto_banco,
+      monto_pos: item.monto_pos,
+      estado: item.estado || 'conciliado',
+      notas: item.notas || null
     }
 
-    const newItem: ExtractoBancario = {
-      ...item,
-      id: 'eb-' + Date.now()
-    }
-    return newItem
+    const { data, error } = await supabase
+      .from('extractos_bancarios')
+      .insert([payload])
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
   },
 
   async deleteExtracto(id: string): Promise<void> {
-    try {
-      await supabase.from('extractos_bancarios').delete().eq('id', id)
-    } catch (e) {
-      console.warn('Error eliminando extracto:', e)
-    }
+    const { error } = await supabase
+      .from('extractos_bancarios')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
   },
 
   // ==========================================
-  // 5. PAGOS MENORES (CAJA MENOR / GASTOS OPERATIVOS)
+  // 5. PAGOS MENORES (CAJA MENOR)
   // ==========================================
-  async getPagosMenores(tenantId: string): Promise<PagoMenor[]> {
-    try {
-      const { data, error } = await supabase
-        .from('pagos_menores')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .order('fecha', { ascending: false })
+  async getPagosMenores(negocioId: string): Promise<PagoMenor[]> {
+    const { data, error } = await supabase
+      .from('pagos_menores')
+      .select('*')
+      .eq('negocio_id', negocioId)
+      .order('fecha', { ascending: false })
 
-      if (!error && data && data.length > 0) return data
-    } catch (e) {
-      console.warn('Error leyendo pagos menores de Supabase:', e)
+    if (error) {
+      console.warn('Error leyendo pagos menores:', error)
+      return []
     }
-
-    const saved = localStorage.getItem(`${STORAGE_KEYS.PAGOS_MENORES}_${tenantId}`)
-    if (saved) {
-      try { return JSON.parse(saved) } catch (_) {}
-    }
-
-    return [
-      {
-        id: 'pm-1',
-        tenant_id: tenantId,
-        fecha: '2026-08-16',
-        concepto: 'Acarreo de bultos desde central de abastos',
-        categoria: 'Acarreos',
-        beneficiario: 'Jorge MotoCarga',
-        documento_beneficiario: '1.067.882.110',
-        monto: 25000,
-        observaciones: 'Pago en efectivo de caja menor con recibo firmado'
-      },
-      {
-        id: 'pm-2',
-        tenant_id: tenantId,
-        fecha: '2026-08-14',
-        concepto: 'Reparación de cerradura y bisagras estante principal',
-        categoria: 'Mantenimiento',
-        beneficiario: 'Cerrajería El Maestro',
-        documento_beneficiario: '78.540.220',
-        monto: 40000,
-        observaciones: 'Servicio técnico menor en local'
-      },
-      {
-        id: 'pm-3',
-        tenant_id: tenantId,
-        fecha: '2026-08-11',
-        concepto: 'Compra de bolsas plásticas y papel térmico para POS',
-        categoria: 'Suministros',
-        beneficiario: 'Variedades del Comercio',
-        documento_beneficiario: '1.102.390.111',
-        monto: 32000,
-        observaciones: 'Rollos de papel térmico 80mm para tickets'
-      }
-    ]
+    return data || []
   },
 
   async addPagoMenor(pago: Omit<PagoMenor, 'id'>): Promise<PagoMenor> {
-    try {
-      const { data, error } = await supabase
-        .from('pagos_menores')
-        .insert([pago])
-        .select()
-        .single()
-
-      if (!error && data) return data
-    } catch (e) {
-      console.warn('Error guardando pago menor en Supabase:', e)
+    const payload = {
+      negocio_id: pago.negocio_id,
+      tenant_id: pago.negocio_id,
+      fecha: pago.fecha,
+      concepto: pago.concepto,
+      categoria: pago.categoria,
+      beneficiario: pago.beneficiario,
+      documento_beneficiario: pago.documento_beneficiario || null,
+      monto: pago.monto,
+      comprobante_url: pago.comprobante_url || null,
+      observaciones: pago.observaciones || null
     }
 
-    const newItem: PagoMenor = {
-      ...pago,
-      id: 'pm-' + Date.now()
-    }
-    return newItem
+    const { data, error } = await supabase
+      .from('pagos_menores')
+      .insert([payload])
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
   },
 
   async deletePagoMenor(id: string): Promise<void> {
-    try {
-      await supabase.from('pagos_menores').delete().eq('id', id)
-    } catch (e) {
-      console.warn('Error eliminando pago menor:', e)
-    }
+    const { error } = await supabase
+      .from('pagos_menores')
+      .delete()
+      .eq('id', id)
+
+    if (error) throw error
   }
 }
