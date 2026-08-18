@@ -178,24 +178,40 @@ export default function POSPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {filtered.map((prod) => (
-                  <button
-                    key={prod.id}
-                    onClick={() => addToCart(prod)}
-                    className="flex flex-col text-left p-3.5 bg-white border border-gray-200 rounded-xl hover:border-gray-900 hover:shadow-sm transition-all relative group"
-                  >
-                    <div className="absolute top-2 right-2 bg-gray-100 text-gray-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                      {prod.stock_actual} ud
-                    </div>
-                    <div className="flex-1 min-w-0 pr-6 mt-1">
-                      <p className="text-[12px] font-semibold text-gray-900 group-hover:text-gray-950 truncate">{prod.nombre}</p>
-                      <p className="text-[10px] text-gray-400 font-mono mt-0.5 truncate">{prod.codigo_barras || 'Sin código'}</p>
-                    </div>
-                    <p className="text-[13px] font-bold text-gray-900 font-mono mt-3">
-                      {formatCOP(prod.precio_venta)}
-                    </p>
-                  </button>
-                ))}
+                {filtered.map((prod) => {
+                  const cartItem = cart.find((c) => c.producto.id === prod.id)
+                  const inCart = !!cartItem
+                  return (
+                    <button
+                      key={prod.id}
+                      onClick={() => addToCart(prod)}
+                      className={[
+                        'flex flex-col text-left p-3.5 bg-white rounded-xl hover:shadow-sm transition-all relative group',
+                        inCart
+                          ? 'border-2 border-gray-900 shadow-sm'
+                          : 'border border-gray-200 hover:border-gray-900',
+                      ].join(' ')}
+                    >
+                      {/* Cart quantity badge — only shows when in cart */}
+                      {inCart ? (
+                        <div className="absolute top-2 right-2 w-5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
+                          {cartItem.cantidad}
+                        </div>
+                      ) : (
+                        <div className="absolute top-2 right-2 bg-gray-100 text-gray-500 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                          {prod.stock_actual} ud
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0 pr-6 mt-1">
+                        <p className="text-[12px] font-semibold text-gray-900 truncate">{prod.nombre}</p>
+                        <p className="text-[10px] text-gray-400 font-mono mt-0.5 truncate">{prod.codigo_barras || 'Sin código'}</p>
+                      </div>
+                      <p className="text-[13px] font-bold text-gray-900 font-mono mt-3">
+                        {formatCOP(prod.precio_venta)}
+                      </p>
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -219,7 +235,7 @@ export default function POSPage() {
           </div>
 
           {/* Cart items */}
-          <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
             {cart.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center text-gray-400">
                 <ShoppingBag size={24} className="mb-2 text-gray-300" />
@@ -228,7 +244,7 @@ export default function POSPage() {
               </div>
             ) : (
               cart.map((item) => (
-                <div key={item.producto.id} className="p-4 flex items-start gap-3 hover:bg-gray-50/50 transition-colors">
+                <div key={item.producto.id} className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50/40 transition-colors">
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-semibold text-gray-900 truncate">{item.producto.nombre}</p>
                     <p className="text-[11px] text-gray-400 font-mono mt-0.5">{formatCOP(item.producto.precio_venta)} c/u</p>
@@ -236,14 +252,14 @@ export default function POSPage() {
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <div className="flex items-center border border-gray-200 rounded-md bg-white overflow-hidden h-6">
                       <button
-                        onClick={() => updateQty(item.producto.id, item.cantidad - 1)}
+                        onClick={() => updateQty(item.producto.id, -1)}
                         className="px-1.5 hover:bg-gray-50 text-gray-500 h-full flex items-center justify-center"
                       >
                         <Minus size={10} />
                       </button>
                       <span className="w-7 text-center text-[11px] font-bold font-mono text-gray-800">{item.cantidad}</span>
                       <button
-                        onClick={() => updateQty(item.producto.id, item.cantidad + 1)}
+                        onClick={() => updateQty(item.producto.id, 1)}
                         disabled={item.cantidad >= item.producto.stock_actual}
                         className="px-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 h-full flex items-center justify-center"
                       >
@@ -265,7 +281,7 @@ export default function POSPage() {
 
           {/* Pricing calculations & checkout triggers */}
           {cart.length > 0 && checkoutState === 'idle' && (
-            <div className="border-t border-gray-150 px-4 py-4 space-y-4 shrink-0">
+            <div className="border-t border-gray-100 px-4 py-4 space-y-4 shrink-0">
               <div className="space-y-1.5 text-[12px]">
                 <div className="flex justify-between text-gray-500">
                   <span>Subtotal</span>
