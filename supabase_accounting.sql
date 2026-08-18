@@ -1,12 +1,12 @@
 -- ============================================================
 -- VENDORA: MÓDULO DE CONTABILIDAD Y GESTIÓN FISCAL (RÉGIMEN SIMPLIFICADO)
--- Tablas con soporte completo para negocio_id y RLS público/autenticado
+-- Script de migración y compatibilidad para negocio_id y tenant_id
 -- ============================================================
 
 -- 1. TABLA: rut_config
 CREATE TABLE IF NOT EXISTS rut_config (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  negocio_id UUID NOT NULL,
+  negocio_id UUID,
   tenant_id UUID,
   nit TEXT DEFAULT '',
   dv TEXT DEFAULT '0',
@@ -25,10 +25,16 @@ CREATE TABLE IF NOT EXISTS rut_config (
   creado_en TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. TABLA: libro_fiscal_registros (Asientos del Libro Fiscal Diario)
+-- Asegurar columnas negocio_id y tenant_id en rut_config
+ALTER TABLE rut_config ADD COLUMN IF NOT EXISTS negocio_id UUID;
+ALTER TABLE rut_config ADD COLUMN IF NOT EXISTS tenant_id UUID;
+UPDATE rut_config SET negocio_id = tenant_id WHERE negocio_id IS NULL AND tenant_id IS NOT NULL;
+UPDATE rut_config SET tenant_id = negocio_id WHERE tenant_id IS NULL AND negocio_id IS NOT NULL;
+
+-- 2. TABLA: libro_fiscal_registros
 CREATE TABLE IF NOT EXISTS libro_fiscal_registros (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  negocio_id UUID NOT NULL,
+  negocio_id UUID,
   tenant_id UUID,
   fecha DATE NOT NULL DEFAULT CURRENT_DATE,
   concepto TEXT NOT NULL,
@@ -41,10 +47,15 @@ CREATE TABLE IF NOT EXISTS libro_fiscal_registros (
   creado_en TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. TABLA: costos_soportados (Facturas y Documentos Soporte de Proveedores)
+ALTER TABLE libro_fiscal_registros ADD COLUMN IF NOT EXISTS negocio_id UUID;
+ALTER TABLE libro_fiscal_registros ADD COLUMN IF NOT EXISTS tenant_id UUID;
+UPDATE libro_fiscal_registros SET negocio_id = tenant_id WHERE negocio_id IS NULL AND tenant_id IS NOT NULL;
+UPDATE libro_fiscal_registros SET tenant_id = negocio_id WHERE tenant_id IS NULL AND negocio_id IS NOT NULL;
+
+-- 3. TABLA: costos_soportados
 CREATE TABLE IF NOT EXISTS costos_soportados (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  negocio_id UUID NOT NULL,
+  negocio_id UUID,
   tenant_id UUID,
   fecha DATE NOT NULL DEFAULT CURRENT_DATE,
   proveedor_nombre TEXT NOT NULL,
@@ -60,10 +71,15 @@ CREATE TABLE IF NOT EXISTS costos_soportados (
   creado_en TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. TABLA: extractos_bancarios (Conciliación Bancaria y Billeteras Digitales)
+ALTER TABLE costos_soportados ADD COLUMN IF NOT EXISTS negocio_id UUID;
+ALTER TABLE costos_soportados ADD COLUMN IF NOT EXISTS tenant_id UUID;
+UPDATE costos_soportados SET negocio_id = tenant_id WHERE negocio_id IS NULL AND tenant_id IS NOT NULL;
+UPDATE costos_soportados SET tenant_id = negocio_id WHERE tenant_id IS NULL AND negocio_id IS NOT NULL;
+
+-- 4. TABLA: extractos_bancarios
 CREATE TABLE IF NOT EXISTS extractos_bancarios (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  negocio_id UUID NOT NULL,
+  negocio_id UUID,
   tenant_id UUID,
   fecha DATE NOT NULL DEFAULT CURRENT_DATE,
   entidad TEXT NOT NULL,
@@ -75,10 +91,15 @@ CREATE TABLE IF NOT EXISTS extractos_bancarios (
   creado_en TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. TABLA: pagos_menores (Gastos Operativos Cotidianos de Caja Menor)
+ALTER TABLE extractos_bancarios ADD COLUMN IF NOT EXISTS negocio_id UUID;
+ALTER TABLE extractos_bancarios ADD COLUMN IF NOT EXISTS tenant_id UUID;
+UPDATE extractos_bancarios SET negocio_id = tenant_id WHERE negocio_id IS NULL AND tenant_id IS NOT NULL;
+UPDATE extractos_bancarios SET tenant_id = negocio_id WHERE tenant_id IS NULL AND negocio_id IS NOT NULL;
+
+-- 5. TABLA: pagos_menores
 CREATE TABLE IF NOT EXISTS pagos_menores (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  negocio_id UUID NOT NULL,
+  negocio_id UUID,
   tenant_id UUID,
   fecha DATE NOT NULL DEFAULT CURRENT_DATE,
   concepto TEXT NOT NULL,
@@ -91,8 +112,13 @@ CREATE TABLE IF NOT EXISTS pagos_menores (
   creado_en TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE pagos_menores ADD COLUMN IF NOT EXISTS negocio_id UUID;
+ALTER TABLE pagos_menores ADD COLUMN IF NOT EXISTS tenant_id UUID;
+UPDATE pagos_menores SET negocio_id = tenant_id WHERE negocio_id IS NULL AND tenant_id IS NOT NULL;
+UPDATE pagos_menores SET tenant_id = negocio_id WHERE tenant_id IS NULL AND negocio_id IS NOT NULL;
+
 -- ============================================================
--- Habilitar RLS y Crear Políticas Abiertas por Negocio
+-- Habilitar RLS y Políticas de Acceso
 -- ============================================================
 ALTER TABLE rut_config ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "allow_all_rut_config" ON rut_config;

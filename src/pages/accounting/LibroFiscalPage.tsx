@@ -215,6 +215,7 @@ export default function LibroFiscalPage() {
     setSaving(true)
     try {
       const payload: Omit<LibroFiscalItem, 'id'> = {
+        negocio_id: profile.negocio_id,
         tenant_id: profile.negocio_id,
         fecha: formFecha,
         concepto: formConcepto,

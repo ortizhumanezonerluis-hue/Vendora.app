@@ -60,6 +60,7 @@ export default function ExtractosBancariosPage() {
     try {
       const isMatch = Math.abs(mb - mp) < 0.01
       const payload: Omit<ExtractoBancario, 'id'> = {
+        negocio_id: profile.negocio_id,
         tenant_id: profile.negocio_id,
         fecha: formFecha,
         entidad: formEntidad,

@@ -59,6 +59,7 @@ export default function PagosMenoresPage() {
     setSaving(true)
     try {
       const payload: Omit<PagoMenor, 'id'> = {
+        negocio_id: profile.negocio_id,
         tenant_id: profile.negocio_id,
         fecha: formFecha,
         concepto: formConcepto,

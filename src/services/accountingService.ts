@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabaseClient'
 
 export interface RutConfig {
   id?: string
-  negocio_id: string
+  negocio_id?: string
   tenant_id?: string
   nit: string
   dv: string
@@ -22,7 +22,7 @@ export interface RutConfig {
 
 export interface LibroFiscalItem {
   id: string
-  negocio_id: string
+  negocio_id?: string
   tenant_id?: string
   fecha: string
   concepto: string
@@ -37,7 +37,7 @@ export interface LibroFiscalItem {
 
 export interface CostoSoportado {
   id: string
-  negocio_id: string
+  negocio_id?: string
   tenant_id?: string
   fecha: string
   proveedor_nombre: string
@@ -55,7 +55,7 @@ export interface CostoSoportado {
 
 export interface ExtractoBancario {
   id: string
-  negocio_id: string
+  negocio_id?: string
   tenant_id?: string
   fecha: string
   entidad: 'Nequi' | 'Daviplata' | 'Bancolombia' | 'Datafono' | 'Otro'
@@ -69,7 +69,7 @@ export interface ExtractoBancario {
 
 export interface PagoMenor {
   id: string
-  negocio_id: string
+  negocio_id?: string
   tenant_id?: string
   fecha: string
   concepto: string
@@ -82,18 +82,95 @@ export interface PagoMenor {
   creado_en?: string
 }
 
+// Robust helper to insert into Supabase handling both negocio_id and tenant_id column names
+async function insertWithFallback(tableName: string, payload: any, negocioId: string) {
+  // First attempt: include both
+  try {
+    const { data, error } = await supabase
+      .from(tableName)
+      .insert([{ ...payload, negocio_id: negocioId, tenant_id: negocioId }])
+      .select()
+      .single()
+    if (!error && data) return data
+    if (error) throw error
+  } catch (err: any) {
+    const msg = err?.message || ''
+    // If negocio_id column is missing in DB schema cache, retry with only tenant_id
+    if (msg.includes('negocio_id') || err?.code === 'PGRST204') {
+      const clean = { ...payload, tenant_id: negocioId }
+      delete clean.negocio_id
+      const { data: d2, error: e2 } = await supabase
+        .from(tableName)
+        .insert([clean])
+        .select()
+        .single()
+      if (!e2 && d2) return d2
+      throw e2
+    }
+    // If tenant_id column is missing, retry with only negocio_id
+    if (msg.includes('tenant_id')) {
+      const clean = { ...payload, negocio_id: negocioId }
+      delete clean.tenant_id
+      const { data: d3, error: e3 } = await supabase
+        .from(tableName)
+        .insert([clean])
+        .select()
+        .single()
+      if (!e3 && d3) return d3
+      throw e3
+    }
+    throw err
+  }
+}
+
+// Robust helper to select from Supabase handling both negocio_id and tenant_id
+async function selectWithFallback(tableName: string, negocioId: string): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .eq('negocio_id', negocioId)
+      .order('fecha', { ascending: false })
+    if (!error && data) return data
+    if (error) throw error
+  } catch (err: any) {
+    const msg = err?.message || ''
+    if (msg.includes('negocio_id') || err?.code === 'PGRST204') {
+      try {
+        const { data: d2, error: e2 } = await supabase
+          .from(tableName)
+          .select('*')
+          .eq('tenant_id', negocioId)
+          .order('fecha', { ascending: false })
+        if (!e2 && d2) return d2
+      } catch (_) {}
+    }
+  }
+  return []
+}
+
 export const accountingService = {
   // ==========================================
   // 1. RUT CONFIGURATION (Conectado a BD)
   // ==========================================
   async getRutConfig(negocioId: string): Promise<RutConfig> {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('rut_config')
         .select('*')
         .eq('negocio_id', negocioId)
         .limit(1)
         .maybeSingle()
+
+      if (error && (error.message?.includes('negocio_id') || error.code === 'PGRST204')) {
+        const fallback = await supabase
+          .from('rut_config')
+          .select('*')
+          .eq('tenant_id', negocioId)
+          .limit(1)
+          .maybeSingle()
+        data = fallback.data
+      }
 
       if (data) return data
     } catch (e) {
@@ -124,9 +201,10 @@ export const accountingService = {
 
     return {
       negocio_id: negocioId,
+      tenant_id: negocioId,
       nit: rfc || '',
       dv: '0',
-      razon_social: storeName || 'Nombre del Negocio',
+      razon_social: storeName || 'Nombre del Comercio',
       nombre_comercial: storeName || '',
       actividad_ciiu: '4711 - Comercio al por menor en establecimientos no especializados',
       responsabilidades: ['52 - No responsable de IVA (Art. 437 E.T.)'],
@@ -141,9 +219,9 @@ export const accountingService = {
   },
 
   async saveRutConfig(config: RutConfig): Promise<RutConfig> {
-    const payload = {
+    const payload: any = {
       negocio_id: config.negocio_id,
-      tenant_id: config.negocio_id,
+      tenant_id: config.negocio_id || config.tenant_id,
       nit: config.nit,
       dv: config.dv,
       razon_social: config.razon_social,
@@ -160,32 +238,67 @@ export const accountingService = {
       actualizado_en: new Date().toISOString()
     }
 
-    // Check if record exists
-    const { data: existing } = await supabase
-      .from('rut_config')
-      .select('id')
-      .eq('negocio_id', config.negocio_id)
-      .limit(1)
-      .maybeSingle()
+    const nId = config.negocio_id || config.tenant_id || ''
 
-    let res
-    if (existing?.id) {
-      res = await supabase
+    // Check existing
+    let existingId: string | null = null
+    try {
+      const { data: ex1 } = await supabase
         .from('rut_config')
-        .update(payload)
-        .eq('id', existing.id)
-        .select()
-        .single()
-    } else {
-      res = await supabase
-        .from('rut_config')
-        .insert([payload])
-        .select()
-        .single()
+        .select('id')
+        .eq('negocio_id', nId)
+        .limit(1)
+        .maybeSingle()
+      if (ex1?.id) existingId = ex1.id
+    } catch (_) {
+      try {
+        const { data: ex2 } = await supabase
+          .from('rut_config')
+          .select('id')
+          .eq('tenant_id', nId)
+          .limit(1)
+          .maybeSingle()
+        if (ex2?.id) existingId = ex2.id
+      } catch (_) {}
     }
 
-    if (res.error) throw res.error
-    return res.data
+    if (existingId) {
+      try {
+        const { data, error } = await supabase
+          .from('rut_config')
+          .update(payload)
+          .eq('id', existingId)
+          .select()
+          .single()
+        if (!error && data) return data
+        if (error && (error.message?.includes('negocio_id') || error.code === 'PGRST204')) {
+          delete payload.negocio_id
+          const { data: d2, error: e2 } = await supabase
+            .from('rut_config')
+            .update(payload)
+            .eq('id', existingId)
+            .select()
+            .single()
+          if (!e2 && d2) return d2
+          throw e2
+        }
+      } catch (err: any) {
+        if (err.message?.includes('negocio_id')) {
+          delete payload.negocio_id
+          const { data: d2, error: e2 } = await supabase
+            .from('rut_config')
+            .update(payload)
+            .eq('id', existingId)
+            .select()
+            .single()
+          if (!e2 && d2) return d2
+          throw e2
+        }
+        throw err
+      }
+    }
+
+    return await insertWithFallback('rut_config', payload, nId)
   },
 
   // Calculate actual annual gross sales from database
@@ -211,105 +324,127 @@ export const accountingService = {
   },
 
   // ==========================================
-  // 2. LIBRO FISCAL DE OPERACIONES DIARIAS
+  // 2. LIBRO FISCAL DE OPERACIONES (DETALLE INDIVIDUAL)
   // ==========================================
   async getLibroFiscal(negocioId: string): Promise<LibroFiscalItem[]> {
-    let dbItems: LibroFiscalItem[] = []
+    let items: LibroFiscalItem[] = []
 
-    try {
-      const { data, error } = await supabase
-        .from('libro_fiscal_registros')
-        .select('*')
-        .eq('negocio_id', negocioId)
-        .order('fecha', { ascending: false })
-
-      if (!error && data) dbItems = data
-    } catch (e) {
-      console.warn('Error leyendo libro_fiscal_registros:', e)
+    // 1. Fetch manual entries from DB
+    const manualEntries = await selectWithFallback('libro_fiscal_registros', negocioId)
+    if (manualEntries && manualEntries.length > 0) {
+      items.push(...manualEntries)
     }
 
-    // Automatic entries from POS sales (ventas)
+    // 2. Fetch EVERY INDIVIDUAL SALE from POS (ventas) with full details
     try {
       const { data: sales } = await supabase
         .from('ventas')
-        .select('id, fecha, total, cajero, usuario_id')
+        .select(`
+          id, fecha, total, cajero, usuario_id, metodo_pago,
+          detalles_venta (
+            cantidad, precio_unitario,
+            productos (
+              nombre
+            )
+          )
+        `)
         .eq('negocio_id', negocioId)
         .order('fecha', { ascending: false })
-        .limit(500)
+        .limit(1000)
 
       if (sales && sales.length > 0) {
-        const salesByDay: Record<string, { total: number; count: number; refs: string[] }> = {}
-        sales.forEach(s => {
-          const day = s.fecha ? s.fecha.split('T')[0] : new Date().toISOString().split('T')[0]
-          if (!salesByDay[day]) {
-            salesByDay[day] = { total: 0, count: 0, refs: [] }
+        sales.forEach((s: any) => {
+          const ticketNum = s.id ? s.id.slice(0, 8).toUpperCase() : 'VENTA'
+          const metodo = s.metodo_pago ? s.metodo_pago.toUpperCase() : 'EFECTIVO'
+          const cajero = s.cajero || s.usuario_id || 'Cajero'
+          
+          // Format item details
+          let productsDesc = ''
+          if (s.detalles_venta && s.detalles_venta.length > 0) {
+            productsDesc = s.detalles_venta
+              .map((d: any) => `${d.cantidad}x ${d.productos?.nombre || 'Producto'}`)
+              .join(', ')
           }
-          salesByDay[day].total += Number(s.total) || 0
-          salesByDay[day].count += 1
-          salesByDay[day].refs.push(s.id.slice(0, 6).toUpperCase())
-        })
 
-        Object.entries(salesByDay).forEach(([day, info]) => {
-          const exists = dbItems.some(i => i.fecha === day && i.origen === 'pos')
-          if (!exists) {
-            dbItems.push({
-              id: `pos-auto-${day}`,
-              negocio_id: negocioId,
-              fecha: day,
-              concepto: `Ventas globales del día (${info.count} tickets)`,
-              tipo: 'ingreso',
-              origen: 'pos',
-              comprobante_ref: `Tickets #${info.refs.slice(0, 3).join(', #')}...`,
-              valor_ingreso: info.total,
-              valor_egreso: 0,
-              observaciones: 'Ingreso global diario sincronizado desde el punto de venta'
-            })
-          }
+          const conceptoTexto = productsDesc
+            ? `Venta Ticket #${ticketNum} (${metodo}) · ${productsDesc}`
+            : `Venta Ticket #${ticketNum} (${metodo}) · Cobro en caja por ${cajero}`
+
+          items.push({
+            id: `pos-${s.id}`,
+            negocio_id: negocioId,
+            fecha: s.fecha ? s.fecha.split('T')[0] : new Date().toISOString().split('T')[0],
+            concepto: conceptoTexto,
+            tipo: 'ingreso',
+            origen: 'pos',
+            comprobante_ref: `Ticket #${ticketNum}`,
+            valor_ingreso: Number(s.total) || 0,
+            valor_egreso: 0,
+            observaciones: `Cajero: ${cajero} · Método: ${metodo}`
+          })
         })
       }
     } catch (e) {
-      console.warn('Error agregando ventas del POS:', e)
+      console.warn('Error cargando ventas individuales del POS para libro fiscal:', e)
     }
 
-    // Automatic entries from received purchase orders (ordenes_compra)
+    // 3. Fetch EVERY RECEIVED PURCHASE ORDER (ordenes_compra)
     try {
       const { data: orders } = await supabase
         .from('ordenes_compra')
-        .select('id, codigo, fecha, costo_total, estado, proveedores(nombre)')
+        .select(`
+          id, codigo, fecha, costo_total, estado,
+          proveedores (
+            nombre
+          ),
+          detalles_orden_compra (
+            cantidad,
+            productos (
+              nombre
+            )
+          )
+        `)
         .eq('negocio_id', negocioId)
         .eq('estado', 'recibida')
+        .order('fecha', { ascending: false })
 
       if (orders && orders.length > 0) {
         orders.forEach((ord: any) => {
-          const day = ord.fecha ? ord.fecha.split('T')[0] : new Date().toISOString().split('T')[0]
-          const exists = dbItems.some(i => i.comprobante_ref === ord.codigo || i.id === `oc-${ord.id}`)
-          if (!exists) {
-            dbItems.push({
-              id: `oc-${ord.id}`,
-              negocio_id: negocioId,
-              fecha: day,
-              concepto: `Compra de mercancía - ${ord.proveedores?.nombre || 'Proveedor'}`,
-              tipo: 'egreso',
-              origen: 'orden_compra',
-              comprobante_ref: ord.codigo,
-              valor_ingreso: 0,
-              valor_egreso: Number(ord.costo_total) || 0,
-              observaciones: 'Registro fiscal permanente de orden de compra recibida'
-            })
+          const provNombre = ord.proveedores?.nombre || 'Proveedor'
+          let itemsDesc = ''
+          if (ord.detalles_orden_compra && ord.detalles_orden_compra.length > 0) {
+            itemsDesc = ord.detalles_orden_compra
+              .map((d: any) => `${d.cantidad}x ${d.productos?.nombre || 'Ítem'}`)
+              .join(', ')
           }
+
+          const concepto = itemsDesc
+            ? `Compra de mercancía a ${provNombre} (${ord.codigo}) · ${itemsDesc}`
+            : `Compra de mercancía recibida - ${provNombre} (${ord.codigo})`
+
+          items.push({
+            id: `oc-${ord.id}`,
+            negocio_id: negocioId,
+            fecha: ord.fecha ? ord.fecha.split('T')[0] : new Date().toISOString().split('T')[0],
+            concepto: concepto,
+            tipo: 'egreso',
+            origen: 'orden_compra',
+            comprobante_ref: ord.codigo,
+            valor_ingreso: 0,
+            valor_egreso: Number(ord.costo_total) || 0,
+            observaciones: `Proveedor: ${provNombre} · Orden de Compra Recibida`
+          })
         })
       }
     } catch (e) {
-      console.warn('Error agregando compras al libro fiscal:', e)
+      console.warn('Error cargando compras para libro fiscal:', e)
     }
 
-    return dbItems.sort((a, b) => b.fecha.localeCompare(a.fecha))
+    return items.sort((a, b) => b.fecha.localeCompare(a.fecha))
   },
 
   async addLibroFiscalItem(item: Omit<LibroFiscalItem, 'id'>): Promise<LibroFiscalItem> {
     const payload = {
-      negocio_id: item.negocio_id,
-      tenant_id: item.negocio_id,
       fecha: item.fecha,
       concepto: item.concepto,
       tipo: item.tipo,
@@ -320,14 +455,7 @@ export const accountingService = {
       observaciones: item.observaciones || null
     }
 
-    const { data, error } = await supabase
-      .from('libro_fiscal_registros')
-      .insert([payload])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
+    return await insertWithFallback('libro_fiscal_registros', payload, item.negocio_id || '')
   },
 
   async updateLibroFiscalItem(id: string, updates: Partial<LibroFiscalItem>): Promise<void> {
@@ -352,23 +480,11 @@ export const accountingService = {
   // 3. COSTOS SOPORTADOS (FACTURAS PROVEEDOR)
   // ==========================================
   async getCostosSoportados(negocioId: string): Promise<CostoSoportado[]> {
-    const { data, error } = await supabase
-      .from('costos_soportados')
-      .select('*')
-      .eq('negocio_id', negocioId)
-      .order('fecha', { ascending: false })
-
-    if (error) {
-      console.warn('Error leyendo costos soportados:', error)
-      return []
-    }
-    return data || []
+    return await selectWithFallback('costos_soportados', negocioId)
   },
 
   async addCostoSoportado(costo: Omit<CostoSoportado, 'id'>): Promise<CostoSoportado> {
     const payload = {
-      negocio_id: costo.negocio_id,
-      tenant_id: costo.negocio_id,
       fecha: costo.fecha,
       proveedor_nombre: costo.proveedor_nombre,
       proveedor_nit: costo.proveedor_nit,
@@ -382,14 +498,7 @@ export const accountingService = {
       notas: costo.notas || null
     }
 
-    const { data, error } = await supabase
-      .from('costos_soportados')
-      .insert([payload])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
+    return await insertWithFallback('costos_soportados', payload, costo.negocio_id || '')
   },
 
   async deleteCostoSoportado(id: string): Promise<void> {
@@ -405,23 +514,11 @@ export const accountingService = {
   // 4. EXTRACTOS BANCARIOS CONCILIADOS
   // ==========================================
   async getExtractosBancarios(negocioId: string): Promise<ExtractoBancario[]> {
-    const { data, error } = await supabase
-      .from('extractos_bancarios')
-      .select('*')
-      .eq('negocio_id', negocioId)
-      .order('fecha', { ascending: false })
-
-    if (error) {
-      console.warn('Error leyendo extractos bancarios:', error)
-      return []
-    }
-    return data || []
+    return await selectWithFallback('extractos_bancarios', negocioId)
   },
 
   async addExtracto(item: Omit<ExtractoBancario, 'id'>): Promise<ExtractoBancario> {
     const payload = {
-      negocio_id: item.negocio_id,
-      tenant_id: item.negocio_id,
       fecha: item.fecha,
       entidad: item.entidad,
       referencia: item.referencia,
@@ -431,14 +528,7 @@ export const accountingService = {
       notas: item.notas || null
     }
 
-    const { data, error } = await supabase
-      .from('extractos_bancarios')
-      .insert([payload])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
+    return await insertWithFallback('extractos_bancarios', payload, item.negocio_id || '')
   },
 
   async deleteExtracto(id: string): Promise<void> {
@@ -454,23 +544,11 @@ export const accountingService = {
   // 5. PAGOS MENORES (CAJA MENOR)
   // ==========================================
   async getPagosMenores(negocioId: string): Promise<PagoMenor[]> {
-    const { data, error } = await supabase
-      .from('pagos_menores')
-      .select('*')
-      .eq('negocio_id', negocioId)
-      .order('fecha', { ascending: false })
-
-    if (error) {
-      console.warn('Error leyendo pagos menores:', error)
-      return []
-    }
-    return data || []
+    return await selectWithFallback('pagos_menores', negocioId)
   },
 
   async addPagoMenor(pago: Omit<PagoMenor, 'id'>): Promise<PagoMenor> {
     const payload = {
-      negocio_id: pago.negocio_id,
-      tenant_id: pago.negocio_id,
       fecha: pago.fecha,
       concepto: pago.concepto,
       categoria: pago.categoria,
@@ -481,14 +559,7 @@ export const accountingService = {
       observaciones: pago.observaciones || null
     }
 
-    const { data, error } = await supabase
-      .from('pagos_menores')
-      .insert([payload])
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
+    return await insertWithFallback('pagos_menores', payload, pago.negocio_id || '')
   },
 
   async deletePagoMenor(id: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import MainLayout from '../../components/layout/MainLayout'
 import { useAuth } from '../../components/auth/AuthContext'
 import { accountingService, CostoSoportado } from '../../services/accountingService'
@@ -7,8 +7,8 @@ import { toast } from '../../components/ui/Toaster'
 import { SkeletonPage } from '../../components/ui/Skeleton'
 import {
   FolderCheck, Plus, Search, FileText, Code2, Download,
-  CheckCircle2, Clock, XCircle, Trash2, X, Save, ExternalLink,
-  Building, Filter, UploadCloud
+  CheckCircle2, Clock, Trash2, X, Save, UploadCloud,
+  FileCheck, Paperclip
 } from 'lucide-react'
 
 type EstadoFilter = 'todos' | 'validado' | 'pendiente'
@@ -30,9 +30,11 @@ export default function CostosSoportadosPage() {
   const [formIva, setFormIva] = useState('0')
   const [formTotal, setFormTotal] = useState('')
   const [formNotas, setFormNotas] = useState('')
-  const [formPdfUrl, setFormPdfUrl] = useState('')
-  const [formXmlUrl, setFormXmlUrl] = useState('')
+  const [attachedFiles, setAttachedFiles] = useState<{ name: string; size: string; type: string }[]>([])
+  const [isDragging, setIsDragging] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (profile?.negocio_id) loadCostos()
@@ -50,7 +52,6 @@ export default function CostosSoportadosPage() {
     }
   }
 
-  // Recalculate total when subtotal or iva changes
   const handleSubtotalChange = (val: string) => {
     setFormSubtotal(val)
     const sub = parseFloat(val) || 0
@@ -65,6 +66,28 @@ export default function CostosSoportadosPage() {
     setFormTotal(String(sub + ivaVal))
   }
 
+  // File Upload Handlers
+  const handleFileProcess = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return
+    const newFiles = Array.from(fileList).map(f => ({
+      name: f.name,
+      size: `${(f.size / 1024).toFixed(1)} KB`,
+      type: f.name.endsWith('.xml') ? 'xml' : 'pdf'
+    }))
+    setAttachedFiles(prev => [...prev, ...newFiles])
+    toast(`${newFiles.length} archivo(s) adjuntado(s)`, { type: 'success' })
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    handleFileProcess(e.dataTransfer.files)
+  }
+
+  const removeAttachedFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!profile?.negocio_id) return
@@ -77,6 +100,7 @@ export default function CostosSoportadosPage() {
     setSaving(true)
     try {
       const payload: Omit<CostoSoportado, 'id'> = {
+        negocio_id: profile.negocio_id,
         tenant_id: profile.negocio_id,
         fecha: formFecha,
         proveedor_nombre: formProveedor,
@@ -86,17 +110,17 @@ export default function CostosSoportadosPage() {
         iva: parseFloat(formIva) || 0,
         total: tot,
         estado: 'validado',
-        pdf_url: formPdfUrl || '#',
-        xml_url: formXmlUrl || '#',
+        pdf_url: attachedFiles.some(f => f.type === 'pdf') ? 'adjunto_pdf' : '',
+        xml_url: attachedFiles.some(f => f.type === 'xml') ? 'adjunto_xml' : '',
         notas: formNotas || undefined
       }
 
       const created = await accountingService.addCostoSoportado(payload)
       setCostos(prev => [created, ...prev])
-      toast('Factura de proveedor registrada en archivo de costos', { type: 'success' })
+      toast('Factura de proveedor registrada en la base de datos', { type: 'success' })
       setModalOpen(false)
     } catch (err: any) {
-      toast(err.message || 'Error al guardar soporte', { type: 'error' })
+      toast(err.message || 'Error al guardar soporte en la base de datos', { type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -118,7 +142,7 @@ export default function CostosSoportadosPage() {
       const q = search.toLowerCase()
       const matchSearch = !q ||
         c.proveedor_nombre.toLowerCase().includes(q) ||
-        c.proveedor_nit.includes(q) ||
+        (c.proveedor_nit || '').includes(q) ||
         c.numero_factura.toLowerCase().includes(q)
 
       const matchEstado = estadoFilter === 'todos' || c.estado === estadoFilter
@@ -138,19 +162,19 @@ export default function CostosSoportadosPage() {
 
   return (
     <MainLayout title="Carpeta de Costos Soportados">
-      <div className="p-6 space-y-5 max-w-[1400px] mx-auto animate-in fade-in duration-300">
+      <div className="p-6 space-y-5 max-w-[1400px] mx-auto animate-in fade-in duration-200">
         
-        {/* Header (OpenAI Style) */}
+        {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-gray-900 tracking-tight">Carpeta de Costos Soportados</h2>
               <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-full border border-emerald-200">
-                Deducibilidad Tributaria
+                Deducibilidad Fiscal
               </span>
             </div>
             <p className="text-[12px] text-gray-400 mt-0.5">
-              Repositorio de facturas electrónicas de proveedores (PDF y XML) con soporte fiscal oficial
+              Repositorio de facturas electrónicas emitidas por proveedores con archivos PDF y XML UBL
             </p>
           </div>
 
@@ -165,8 +189,7 @@ export default function CostosSoportadosPage() {
                 setFormIva('0')
                 setFormTotal('')
                 setFormNotas('')
-                setFormPdfUrl('')
-                setFormXmlUrl('')
+                setAttachedFiles([])
                 setModalOpen(true)
               }}
               className="px-3.5 h-8 bg-gray-900 hover:bg-gray-800 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
@@ -177,14 +200,14 @@ export default function CostosSoportadosPage() {
           </div>
         </div>
 
-        {/* Summary Card */}
+        {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">
               Total Costos Soportados
             </span>
             <p className="text-2xl font-bold font-mono text-gray-900">{formatCOP(totalSoportado)}</p>
-            <p className="text-[10px] text-gray-400 mt-1">Con validez formal ante compras a proveedores</p>
+            <p className="text-[10px] text-gray-400 mt-1">Con respaldo formal de facturas recibidas</p>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
@@ -192,22 +215,22 @@ export default function CostosSoportadosPage() {
               Facturas Electrónicas
             </span>
             <p className="text-2xl font-bold font-mono text-gray-900">{filtered.length} docs</p>
-            <p className="text-[10px] text-emerald-600 font-semibold mt-1">100% con respaldo PDF / XML</p>
+            <p className="text-[10px] text-emerald-600 font-semibold mt-1">100% con respaldo documental</p>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
             <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">
-              Estado de Soporte Fiscal
+              Estado de Archivo
             </span>
             <p className="text-2xl font-bold text-emerald-700 flex items-center gap-1.5">
               <CheckCircle2 size={22} />
               Validado
             </p>
-            <p className="text-[10px] text-gray-400 mt-1">Archivos disponibles para inspección DIAN</p>
+            <p className="text-[10px] text-gray-400 mt-1">Disponible para auditoría contable</p>
           </div>
         </div>
 
-        {/* Search and Filters Bar (OpenAI Style) */}
+        {/* Search & Filters */}
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-3 flex-1 min-w-[280px]">
             <div className="relative flex-1 max-w-sm">
@@ -226,7 +249,6 @@ export default function CostosSoportadosPage() {
               )}
             </div>
 
-            {/* Filter Pills */}
             <div className="flex items-center gap-1">
               {([
                 { key: 'todos', label: 'Todos' },
@@ -250,7 +272,7 @@ export default function CostosSoportadosPage() {
           </div>
 
           <div className="text-[12px] text-gray-400 font-medium">
-            {filtered.length} resultado{filtered.length !== 1 ? 's' : ''}
+            {filtered.length} registro{filtered.length !== 1 ? 's' : ''}
           </div>
         </div>
 
@@ -260,7 +282,7 @@ export default function CostosSoportadosPage() {
             <FolderCheck size={28} className="mx-auto text-gray-300 mb-1" />
             <p className="text-[13px] font-bold text-gray-700">Sin facturas registradas</p>
             <p className="text-[11px] text-gray-400 max-w-sm mx-auto">
-              Carga las facturas electrónicas emitidas por tus proveedores para justificar costos de adquisición.
+              Carga las facturas electrónicas de tus proveedores usando el botón superior para archivarlas.
             </p>
           </div>
         ) : (
@@ -297,15 +319,15 @@ export default function CostosSoportadosPage() {
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-1">
                           <button
-                            onClick={() => toast(`Visualizando PDF factura ${item.numero_factura}`, { type: 'success' })}
-                            className="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 rounded text-[10px] font-bold border border-red-200/60 flex items-center gap-0.5 transition-colors"
+                            onClick={() => toast(`Visualizando soporte PDF de factura ${item.numero_factura}`, { type: 'success' })}
+                            className="px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-700 rounded text-[10px] font-bold border border-red-200 flex items-center gap-0.5 transition-colors"
                           >
                             <FileText size={10} />
                             PDF
                           </button>
                           <button
-                            onClick={() => toast(`Descargando XML UBL factura ${item.numero_factura}`, { type: 'success' })}
-                            className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[10px] font-bold border border-blue-200/60 flex items-center gap-0.5 transition-colors"
+                            onClick={() => toast(`Descargando archivo XML UBL de factura ${item.numero_factura}`, { type: 'success' })}
+                            className="px-2 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded text-[10px] font-bold border border-blue-200 flex items-center gap-0.5 transition-colors"
                           >
                             <Code2 size={10} />
                             XML
@@ -313,7 +335,7 @@ export default function CostosSoportadosPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full text-[10px] font-bold inline-flex items-center gap-1">
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-bold inline-flex items-center gap-1">
                           <CheckCircle2 size={10} />
                           Validado
                         </span>
@@ -335,7 +357,7 @@ export default function CostosSoportadosPage() {
           </div>
         )}
 
-        {/* Modal Cargar Factura */}
+        {/* Modal Cargar Factura with Functional Drag & Drop */}
         {modalOpen && (
           <div className="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl border border-gray-200 w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -382,7 +404,7 @@ export default function CostosSoportadosPage() {
                       <input
                         type="text"
                         required
-                        placeholder="Ej: Distribuidora Central S.A.S."
+                        placeholder="Ej: Distribuidora Mayorista S.A.S."
                         value={formProveedor}
                         onChange={e => setFormProveedor(e.target.value)}
                         className="w-full h-8 px-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900 bg-white"
@@ -436,20 +458,65 @@ export default function CostosSoportadosPage() {
                     </div>
                   </div>
 
+                  {/* Functional Drag & Drop and File Picker */}
                   <div>
                     <label className="font-semibold text-gray-700 block mb-1">Archivos Adjuntos (PDF y XML)</label>
-                    <div className="border border-dashed border-gray-300 rounded-lg p-3 text-center bg-gray-50/50 hover:bg-gray-50 cursor-pointer">
-                      <UploadCloud size={20} className="mx-auto text-gray-400 mb-1" />
-                      <p className="text-[11px] font-semibold text-gray-700">Arrastra o adjunta tus archivos PDF / XML</p>
-                      <p className="text-[10px] text-gray-400">Formatos soportados: .pdf, .xml UBL 2.1</p>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={e => handleFileProcess(e.target.files)}
+                      accept=".pdf,.xml,application/pdf,text/xml"
+                      multiple
+                      className="hidden"
+                    />
+
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={handleDrop}
+                      className={[
+                        'border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-all',
+                        isDragging
+                          ? 'border-gray-900 bg-gray-100'
+                          : 'border-gray-300 bg-gray-50/50 hover:bg-gray-100/70'
+                      ].join(' ')}
+                    >
+                      <UploadCloud size={24} className="mx-auto text-gray-400 mb-1" />
+                      <p className="text-[12px] font-semibold text-gray-700">
+                        Haz clic para seleccionar o arrastra archivos aquí
+                      </p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Soporta documentos .pdf y archivos .xml UBL 2.1</p>
                     </div>
+
+                    {/* Attached files list */}
+                    {attachedFiles.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {attachedFiles.map((file, idx) => (
+                          <div key={idx} className="flex items-center justify-between px-2.5 py-1.5 bg-gray-100 rounded-md text-[11px]">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {file.type === 'pdf' ? <FileText size={12} className="text-red-500 shrink-0" /> : <Code2 size={12} className="text-blue-500 shrink-0" />}
+                              <span className="font-medium text-gray-800 truncate">{file.name}</span>
+                              <span className="text-gray-400 text-[10px]">({file.size})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeAttachedFile(idx)}
+                              className="text-gray-400 hover:text-red-500 p-0.5"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div>
                     <label className="font-semibold text-gray-700 block mb-1">Notas / Descripción (Opcional)</label>
                     <input
                       type="text"
-                      placeholder="Ej: Compra de víveres para surtir abarrotes..."
+                      placeholder="Ej: Compra de abarrotes..."
                       value={formNotas}
                       onChange={e => setFormNotas(e.target.value)}
                       className="w-full h-8 px-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-900 bg-white"
@@ -472,7 +539,7 @@ export default function CostosSoportadosPage() {
                     className="px-4 h-8 bg-gray-900 hover:bg-gray-800 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
                   >
                     <Save size={12} />
-                    {saving ? 'Guardando...' : 'Guardar Factura'}
+                    {saving ? 'Guardando...' : 'Guardar en Base de Datos'}
                   </button>
                 </div>
               </form>

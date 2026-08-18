@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { reorderService, OrdenCompra } from '../../services/reorderService'
 import { useAuth } from '../auth/AuthContext'
 import { formatCOP } from '../../lib/utils'
