@@ -27,7 +27,7 @@ export default function LandingPage() {
       {/* 2. Bento Grid Features */}
       <BentoFeatures onOpenDemoModal={handleOpenDemoModal} />
 
-      {/* 3. La Joya de la Corona: Módulo Contable 3.500 UVT */}
+      {/* 3. Módulo Contable Inteligente */}
       <AccountingShowcase onOpenDemoModal={handleOpenDemoModal} />
 
       {/* 4. Planes y Precios con Financiación */}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, X, Lock, Sparkles, ArrowRight, ShieldCheck, HelpCircle } from 'lucide-react'
+import { Check, X, Lock, ArrowRight, ShieldCheck } from 'lucide-react'
 
 export default function PricingSection({ onOpenDemoModal }: { onOpenDemoModal: () => void }) {
   const [billingMode, setBillingMode] = useState<'financed' | 'upfront'>('financed')
@@ -105,7 +105,7 @@ export default function PricingSection({ onOpenDemoModal }: { onOpenDemoModal: (
                 </li>
                 <li className="flex items-start gap-2.5 text-slate-400">
                   <X size={16} className="text-slate-300 shrink-0 mt-0.5" />
-                  <span>Sin módulo contable 3.500 UVT</span>
+                  <span>Sin módulo contable</span>
                 </li>
               </ul>
             </div>
@@ -179,8 +179,8 @@ export default function PricingSection({ onOpenDemoModal }: { onOpenDemoModal: (
                   <span>Usuarios y roles de empleados ilimitados</span>
                 </li>
                 <li className="flex items-start gap-2.5 text-slate-400 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                  <Lock size={15} className="text-amber-500 shrink-0 mt-0.5" />
-                  <span className="text-[12px]">Módulo Contable 3.500 UVT bloqueado 🔒</span>
+                  <Lock size={14} className="text-slate-400 shrink-0 mt-0.5" />
+                  <span className="text-[12px] text-slate-500 font-medium">Módulo Contable bloqueado</span>
                 </li>
               </ul>
             </div>
@@ -193,80 +193,78 @@ export default function PricingSection({ onOpenDemoModal }: { onOpenDemoModal: (
             </button>
           </div>
 
-          {/* Card 3: MAX (Everything Included) */}
-          <div className="bg-gradient-to-b from-slate-900 to-slate-950 text-white border border-slate-800 rounded-2xl p-7 flex flex-col justify-between shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl" />
+          {/* Card 3: MAX (Clean White with Emerald Border) */}
+          <div className="bg-white border-2 border-emerald-600 rounded-2xl p-7 flex flex-col justify-between shadow-xl shadow-emerald-500/10 relative">
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 bg-emerald-600 text-white rounded-full text-[11px] font-bold uppercase tracking-wider shadow-sm">
+              Plan Completo
+            </div>
 
             <div>
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Tranquilidad Absoluta</span>
-                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold rounded border border-emerald-500/30">
-                  Full ERP + Fiscal
+                <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">Tranquilidad Total</span>
+                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded border border-emerald-200">
+                  Full ERP + Contable
                 </span>
               </div>
 
-              <h3 className="text-2xl font-bold text-white mt-1">Plan Max</h3>
-              <p className="text-[13px] text-slate-400 mt-2 min-h-[38px]">
+              <h3 className="text-2xl font-bold text-slate-900 mt-1">Plan Max</h3>
+              <p className="text-[13px] text-slate-500 mt-2 min-h-[38px]">
                 Control total del negocio + el guardián contable y tributario ante la DIAN.
               </p>
 
               {/* Price display */}
-              <div className="mt-5 pb-5 border-b border-slate-800">
+              <div className="mt-5 pb-5 border-b border-slate-100">
                 {billingMode === 'financed' ? (
                   <div>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-extrabold text-white">$ 240.000</span>
-                      <span className="text-[13px] font-semibold text-slate-400">/ mes (10 cuotas)</span>
+                      <span className="text-3xl font-extrabold text-slate-900">$ 240.000</span>
+                      <span className="text-[13px] font-semibold text-slate-500">/ mes (10 cuotas)</span>
                     </div>
-                    <p className="text-[11px] text-emerald-400 font-semibold mt-1">Cuota Inicial: $ 800.000 COP</p>
+                    <p className="text-[11px] text-emerald-700 font-semibold mt-1">Cuota Inicial: $ 800.000 COP</p>
                   </div>
                 ) : (
                   <div>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-extrabold text-white">$ 3'200.000</span>
-                      <span className="text-[13px] font-semibold text-slate-400">COP único</span>
+                      <span className="text-3xl font-extrabold text-slate-900">$ 3'200.000</span>
+                      <span className="text-[13px] font-semibold text-slate-500">COP único</span>
                     </div>
-                    <p className="text-[11px] text-emerald-400 font-semibold mt-1">Licencia vitalicia sin mensualidades</p>
+                    <p className="text-[11px] text-emerald-600 font-semibold mt-1">Licencia vitalicia sin mensualidades</p>
                   </div>
                 )}
               </div>
 
               {/* Features List */}
-              <ul className="mt-6 space-y-3 text-[13px] text-slate-200">
+              <ul className="mt-6 space-y-3 text-[13px] text-slate-700">
                 <li className="flex items-start gap-2.5">
-                  <Check size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                  <span className="font-semibold text-emerald-300">TODO lo incluido en el Plan Pro</span>
+                  <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <span className="font-semibold text-slate-900">TODO lo incluido en el Plan Pro</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <Check size={16} className="text-emerald-400 shrink-0 mt-0.5" />
-                  <span className="font-bold text-white">Guardián del Tope 3.500 UVT en tiempo real</span>
+                  <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
+                  <span className="font-bold text-slate-900">Guardián del Tope 3.500 UVT en tiempo real</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <Check size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
                   <span>Libro Fiscal diario automatizado (Art. 616-8 E.T.)</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <Check size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
                   <span>Carpeta de Costos Soportados (PDF y XML de proveedores)</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <Check size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
                   <span>Conciliación de Extractos (Nequi, Daviplata, Bancos)</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <Check size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+                  <Check size={16} className="text-emerald-600 shrink-0 mt-0.5" />
                   <span>Registro de Pagos Menores y Caja Menor</span>
-                </li>
-                <li className="flex items-start gap-2.5 text-emerald-300 font-semibold bg-slate-800/80 p-2 rounded-lg border border-slate-700">
-                  <Sparkles size={15} className="text-emerald-400 shrink-0 mt-0.5" />
-                  <span>Instalación y capacitación presencial en tu local (Córdoba)</span>
                 </li>
               </ul>
             </div>
 
             <button
               onClick={onOpenDemoModal}
-              className="mt-8 w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-[13px] rounded-xl shadow-lg shadow-emerald-500/25 transition-all"
+              className="mt-8 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[13px] rounded-xl shadow-lg shadow-emerald-600/20 transition-all"
             >
               Seleccionar Plan Max Completo
             </button>
@@ -280,7 +278,7 @@ export default function PricingSection({ onOpenDemoModal }: { onOpenDemoModal: (
             <ShieldCheck size={28} className="text-blue-600 shrink-0" />
             <div>
               <p className="text-[13px] font-bold text-slate-900">Trato directo entre comerciantes locales</p>
-              <p className="text-[11px] text-slate-500">Sin reportes a centrales de riesgo, sin intereses ocultos y con soporte cara a cara.</p>
+              <p className="text-[11px] text-slate-500">Sin reportes a centrales de riesgo, sin intereses ocultos y con soporte directo.</p>
             </div>
           </div>
           <button

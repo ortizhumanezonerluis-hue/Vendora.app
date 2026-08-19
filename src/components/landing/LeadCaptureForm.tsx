@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { toast } from '../ui/Toaster'
 import {
-  Calendar, CheckCircle2, Store, User, Phone, MapPin,
-  Sparkles, ArrowRight, Shield, MessageCircle
+  Calendar, CheckCircle2, Store, User, Phone,
+  MessageCircle, Sparkles
 } from 'lucide-react'
 
 export default function LeadCaptureForm() {
@@ -24,7 +24,6 @@ export default function LeadCaptureForm() {
 
     setLoading(true)
     try {
-      // Save lead to Supabase leads table if exists, otherwise fallback safely
       try {
         await supabase
           .from('leads')
@@ -41,16 +40,15 @@ export default function LeadCaptureForm() {
       }
 
       setSubmitted(true)
-      toast('¡Solicitud enviada! Abriendo WhatsApp para coordinar la visita...', { type: 'success' })
+      toast('¡Solicitud enviada! Abriendo WhatsApp para coordinar...', { type: 'success' })
 
-      // Open customized WhatsApp link
-      const text = `¡Hola! Me gustaría agendar una demostración gratuita de Vendora en mi negocio.\n\n` +
+      const text = `¡Hola! Me gustaría agendar una demostración gratuita de Vendora para mi negocio.\n\n` +
         `🏬 *Comercio:* ${comercio}\n` +
         `👤 *Propietario:* ${propietario}\n` +
         `📍 *Municipio:* ${municipio}\n` +
         `📱 *WhatsApp:* ${telefono}\n` +
         `🏷️ *Tipo de Negocio:* ${tipoNegocio}\n\n` +
-        `¿Qué día y hora tienen disponibilidad para visitarme o hacer la demo?`
+        `¿Qué disponibilidad tienen para la demo?`
 
       const waUrl = `https://wa.me/573009797523?text=${encodeURIComponent(text)}`
       setTimeout(() => {
@@ -65,47 +63,44 @@ export default function LeadCaptureForm() {
   }
 
   return (
-    <section id="demo" className="py-20 lg:py-28 bg-gradient-to-b from-slate-50 to-white relative overflow-hidden">
+    <section id="demo" className="py-20 lg:py-28 bg-white border-b border-slate-200 relative">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="bg-slate-900 text-white rounded-3xl p-8 sm:p-12 lg:p-14 shadow-2xl border border-slate-800 relative overflow-hidden">
+        {/* Clean Light Container */}
+        <div className="bg-slate-50 border border-slate-200 rounded-3xl p-8 sm:p-12 lg:p-14 shadow-sm relative overflow-hidden">
           
-          {/* Ambient Glows */}
-          <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-600/15 rounded-full blur-3xl pointer-events-none" />
-
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center relative z-10">
             
             {/* Left: Value Proposition */}
             <div className="lg:col-span-6 space-y-5">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-[11px] font-bold border border-blue-500/30">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-200">
                 <Calendar size={13} />
                 <span>Demostración Gratuita de 20 Minutos</span>
               </div>
 
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
                 No dejes tu negocio a la suerte de una libreta.
               </h2>
 
-              <p className="text-slate-300 text-[14px] leading-relaxed">
-                Agenda una visita técnica presencial en tu propio local comercial (Cereté, Montería, Ciénaga de Oro, Sahagún) o una sesión virtual guiada para todo Colombia.
+              <p className="text-slate-600 text-[14px] leading-relaxed">
+                Agenda una demostración guiada en tu local comercial o una sesión virtual interactiva para todo Colombia sin ningún costo.
               </p>
 
               <div className="space-y-3 pt-2">
-                <div className="flex items-center gap-3 text-[13px] text-slate-200">
-                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-3 text-[13px] text-slate-700">
+                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                     <CheckCircle2 size={13} />
                   </div>
                   <span>Probamos el software con tus propios productos y precios.</span>
                 </div>
-                <div className="flex items-center gap-3 text-[13px] text-slate-200">
-                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-3 text-[13px] text-slate-700">
+                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                     <CheckCircle2 size={13} />
                   </div>
                   <span>Revisamos tu estado actual frente al tope de las 3.500 UVT.</span>
                 </div>
-                <div className="flex items-center gap-3 text-[13px] text-slate-200">
-                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-3 text-[13px] text-slate-700">
+                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
                     <CheckCircle2 size={13} />
                   </div>
                   <span>Sin ningún compromiso de compra.</span>
@@ -113,8 +108,8 @@ export default function LeadCaptureForm() {
               </div>
             </div>
 
-            {/* Right: Lead Form */}
-            <div className="lg:col-span-6 bg-white text-slate-900 p-6 sm:p-8 rounded-2xl shadow-xl">
+            {/* Right: Lead Form in White Card */}
+            <div className="lg:col-span-6 bg-white text-slate-900 p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-sm">
               
               {!submitted ? (
                 <form onSubmit={handleSubmit} className="space-y-4 text-[13px]">
@@ -208,9 +203,9 @@ export default function LeadCaptureForm() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-600/25 transition-all flex items-center justify-center gap-2 mt-2"
+                    className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-2 mt-2"
                   >
-                    <MessageCircle size={17} />
+                    <MessageCircle size={16} />
                     <span>{loading ? 'Agendando...' : 'Agendar Demostración por WhatsApp'}</span>
                   </button>
 
@@ -225,7 +220,7 @@ export default function LeadCaptureForm() {
                   </div>
                   <h3 className="text-xl font-bold text-slate-900">¡Demostración Solicitada!</h3>
                   <p className="text-[13px] text-slate-600 max-w-sm mx-auto">
-                    Hemos recibido los datos de <strong>{comercio}</strong>. Nos comunicaremos a tu WhatsApp <strong>{telefono}</strong> de inmediato para coordinar la hora exacta.
+                    Hemos recibido los datos de <strong>{comercio}</strong>. Nos comunicaremos a tu WhatsApp <strong>{telefono}</strong> de inmediato.
                   </p>
                   <button
                     onClick={() => setSubmitted(false)}

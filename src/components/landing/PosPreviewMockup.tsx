@@ -242,12 +242,6 @@ export default function PosPreviewMockup() {
         </div>
 
       </div>
-
-      {/* Floating Interactive Badge */}
-      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 bg-white border border-slate-200 text-slate-700 px-4 py-1.5 rounded-full shadow-lg text-[11px] font-semibold flex items-center gap-2">
-        <Sparkles size={13} className="text-amber-500 shrink-0" />
-        <span>Pruébalo aquí arriba: Selecciona productos y cambia cantidades en tiempo real</span>
-      </div>
     </div>
   )
 }

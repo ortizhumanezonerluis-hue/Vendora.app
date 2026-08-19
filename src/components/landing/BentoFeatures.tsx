@@ -99,7 +99,7 @@ export default function BentoFeatures({ onOpenDemoModal }: { onOpenDemoModal: ()
           {/* Card 3: El Guardián de las 3.500 UVT */}
           <div className="bg-gradient-to-b from-emerald-50/70 to-slate-50 border-2 border-emerald-500/30 rounded-2xl p-7 flex flex-col justify-between hover:shadow-xl hover:border-emerald-500 transition-all group relative overflow-hidden">
             <div className="absolute top-3 right-3 px-2 py-0.5 bg-emerald-600 text-white rounded-full text-[9px] font-bold uppercase tracking-wider">
-              La Joya Fiscal
+              Control Fiscal
             </div>
 
             <div>
