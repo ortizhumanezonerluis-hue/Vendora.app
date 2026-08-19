@@ -19,6 +19,7 @@ import LibroFiscalPage from './pages/accounting/LibroFiscalPage'
 import CostosSoportadosPage from './pages/accounting/CostosSoportadosPage'
 import ExtractosBancariosPage from './pages/accounting/ExtractosBancariosPage'
 import PagosMenoresPage from './pages/accounting/PagosMenoresPage'
+import LandingPage from './pages/LandingPage'
 import { Toaster } from './components/ui/Toaster'
 
 export default function App() {
@@ -26,6 +27,9 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public Landing Page */}
+          <Route path="/" element={<LandingPage />} />
+          
           <Route path="/login" element={<LoginPage />} />
           <Route
             path="/scanner-app"
@@ -33,14 +37,6 @@ export default function App() {
           />
           
           {/* Protected Routes */}
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Navigate to="/pos" replace />
-              </ProtectedRoute>
-            }
-          />
           <Route
             path="/pos"
             element={
