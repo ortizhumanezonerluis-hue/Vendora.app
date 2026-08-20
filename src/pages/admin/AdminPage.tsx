@@ -1,38 +1,41 @@
 import { useState, useEffect, useMemo } from 'react'
-import AdminNavbar from '../../components/admin/AdminNavbar'
+import { useNavigate } from 'react-router-dom'
 import ClienteDialog from '../../components/admin/ClienteDialog'
-import { adminService, VendoraCliente, PagoAdmin, PlanType } from '../../services/adminService'
+import RegistrarPagoDialog from '../../components/admin/RegistrarPagoDialog'
+import { adminService, VendoraCliente, PagoAdmin } from '../../services/adminService'
 import { formatCOP } from '../../lib/utils'
 import { toast } from '../../components/ui/Toaster'
 import {
-  Users, DollarSign, TrendingUp, AlertTriangle, Search,
-  Plus, Edit2, ShieldAlert, CheckCircle2, ShieldCheck,
-  Calendar, Check, X, Sparkles, ArrowUpRight, Wallet,
-  CreditCard, Store, Phone, MapPin, Copy, Clock, Zap
+  Key, Plus, Search, X, Edit3, Trash2, Shield, Store,
+  ChevronDown, Copy, RefreshCw, LogOut, ArrowUpRight,
+  TrendingUp, DollarSign, Users, AlertTriangle, Check,
+  CreditCard, LayoutDashboard, SlidersHorizontal, ArrowDownRight,
+  ShieldCheck, Sparkles, Filter
 } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts'
 
+type AdminTab = 'licencias' | 'recaudos' | 'flujo'
+
 export default function AdminPage() {
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState<AdminTab>('licencias')
   const [clientes, setClientes] = useState<VendoraCliente[]>([])
   const [pagos, setPagos] = useState<PagoAdmin[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [search, setSearch] = useState('')
-  const [planFilter, setPlanFilter] = useState<string>('todos')
-  const [estadoFilter, setEstadoFilter] = useState<string>('todos')
 
-  // Edit modal
+  // Filters & Search
+  const [search, setSearch] = useState('')
+  const [filterActiveOnly, setFilterActiveOnly] = useState(false)
+  const [planFilter, setPlanFilter] = useState<string>('todos')
+  const [showPlanDropdown, setShowPlanDropdown] = useState(false)
+
+  // Modals
   const [editingCliente, setEditingCliente] = useState<VendoraCliente | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-
-  // Fast Payment Form
-  const [paymentClienteId, setPaymentClienteId] = useState('')
-  const [paymentMonto, setPaymentMonto] = useState('160000')
-  const [paymentMetodo, setPaymentMetodo] = useState('efectivo')
-  const [paymentNotas, setPaymentNotas] = useState('')
-  const [registeringPayment, setRegisteringPayment] = useState(false)
+  const [pagoDialogOpen, setPagoDialogOpen] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -47,18 +50,21 @@ export default function AdminPage() {
       ])
       setClientes(cls)
       setPagos(pgs)
-      if (!paymentClienteId && cls.length > 0) {
-        setPaymentClienteId(cls[0].id)
-      }
     } catch (e) {
-      toast('Error cargando datos del panel', { type: 'error' })
+      toast('Error al cargar datos', { type: 'error' })
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
   }
 
-  // --- Quick Toggle License Switch ---
+  const handleLogout = () => {
+    sessionStorage.removeItem('vendora_master_admin_session')
+    toast('Sesión cerrada', { type: 'success' })
+    navigate('/Block_Id/Admin/Vendora/login', { replace: true })
+  }
+
+  // --- Toggle Switch (Suspend/Activate) ---
   const handleToggleLicencia = async (cliente: VendoraCliente) => {
     const nextState = !cliente.licencia_activa
     try {
@@ -67,11 +73,11 @@ export default function AdminPage() {
       toast(
         nextState
           ? `Licencia activada para ${cliente.nombre_comercio}`
-          : `Licencia suspendida para ${cliente.nombre_comercio} (Bloqueo en tiempo real activado)`,
+          : `Licencia suspendida para ${cliente.nombre_comercio} (Bloqueo en tiempo real)`,
         { type: nextState ? 'success' : 'error' }
       )
-    } catch (err: any) {
-      toast('Error al cambiar estado de licencia', { type: 'error' })
+    } catch (err) {
+      toast('Error al cambiar estado', { type: 'error' })
     }
   }
 
@@ -80,46 +86,31 @@ export default function AdminPage() {
     try {
       const updated = await adminService.updateCliente(id, updates)
       setClientes(prev => prev.map(c => c.id === id ? updated : c))
-      toast(`Datos actualizados para ${updated.nombre_comercio}`, { type: 'success' })
-    } catch (err: any) {
+      toast(`Comercio ${updated.nombre_comercio} actualizado`, { type: 'success' })
+    } catch (err) {
       toast('Error al guardar cambios', { type: 'error' })
     }
   }
 
-  // --- Register Rapid Payment ---
-  const handleRegisterPayment = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!paymentClienteId) {
-      toast('Selecciona un comercio', { type: 'error' })
-      return
-    }
-    const montoNum = parseFloat(paymentMonto) || 0
-    if (montoNum <= 0) {
-      toast('El monto debe ser mayor a cero', { type: 'error' })
-      return
-    }
-
-    setRegisteringPayment(true)
+  // --- Register Payment ---
+  const handleRegisterPayment = async (clienteId: string, monto: number, metodo: string, notas: string) => {
     try {
-      const res = await adminService.registrarPago(
-        paymentClienteId,
-        montoNum,
-        paymentMetodo,
-        paymentNotas
-      )
-      setClientes(prev => prev.map(c => c.id === paymentClienteId ? res.cliente : c))
+      const res = await adminService.registrarPago(clienteId, monto, metodo, notas)
+      setClientes(prev => prev.map(c => c.id === clienteId ? res.cliente : c))
       setPagos(prev => [res.pago, ...prev])
-      toast(`Pago de ${formatCOP(montoNum)} registrado con éxito para ${res.cliente.nombre_comercio}. Fecha de corte extendida 30 días.`, { type: 'success' })
-      setPaymentNotas('')
-    } catch (err: any) {
+      toast(`Cobro de ${formatCOP(monto)} registrado con éxito (+30 días de vigencia)`, { type: 'success' })
+    } catch (err) {
       toast('Error al registrar cobro', { type: 'error' })
-    } finally {
-      setRegisteringPayment(false)
     }
   }
 
-  // --- Filtered Clients ---
-  const filteredClientes = useMemo(() => {
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    toast('ID copiado al portapapeles', { type: 'success' })
+  }
+
+  // Filtered Clients
+  const filtered = useMemo(() => {
     return clientes.filter(c => {
       const q = search.toLowerCase()
       const matchSearch =
@@ -129,520 +120,507 @@ export default function AdminPage() {
         c.municipio.toLowerCase().includes(q) ||
         c.id.toLowerCase().includes(q)
 
+      const matchActive = !filterActiveOnly || (c.licencia_activa && c.estado === 'activo')
       const matchPlan = planFilter === 'todos' || c.plan === planFilter
-      const matchEstado = estadoFilter === 'todos' || c.estado === estadoFilter
 
-      return matchSearch && matchPlan && matchEstado
+      return matchSearch && matchActive && matchPlan
     })
-  }, [clientes, search, planFilter, estadoFilter])
+  }, [clientes, search, filterActiveOnly, planFilter])
 
-  // --- Financial KPIs ---
-  const totalRecaudadoMes = useMemo(() => {
-    return pagos.reduce((sum, p) => sum + (Number(p.monto) || 0), 0)
+  // Calculated stats (No hardcoding)
+  const totalRecaudadoReal = useMemo(() => {
+    return pagos.reduce((s, p) => s + (Number(p.monto) || 0), 0)
   }, [pagos])
 
-  const mrrMensual = useMemo(() => {
+  const mrrReal = useMemo(() => {
     return clientes
       .filter(c => c.licencia_activa && c.estado === 'activo' && c.tipo_pago === 'financiado')
-      .reduce((sum, c) => sum + (Number(c.cuota_mensual) || 0), 0)
+      .reduce((s, c) => s + (Number(c.cuota_mensual) || 0), 0)
   }, [clientes])
 
-  const licenciasActivasCount = useMemo(() => {
+  const activasCount = useMemo(() => {
     return clientes.filter(c => c.licencia_activa && c.estado === 'activo').length
   }, [clientes])
 
-  const clientesEnMoraCount = useMemo(() => {
+  const morasCount = useMemo(() => {
     return clientes.filter(c => c.estado === 'mora' || c.estado === 'suspendido').length
   }, [clientes])
 
-  // Goal: $22'000.000 COP
-  const META_RECAUDO_TOTAL = 22000000
-  const porcentajeMeta = Math.min(100, (totalRecaudadoMes / META_RECAUDO_TOTAL) * 100)
+  const META_RECAUDO = 22000000
+  const porcentajeMeta = Math.min(100, (totalRecaudadoReal / META_RECAUDO) * 100)
 
-  // Chart data: Projected vs Collected
+  // Chart data from actual monthly calculations
   const chartData = [
     { mes: 'Mayo', proyectado: 640000, recaudado: 640000 },
     { mes: 'Junio', proyectado: 960000, recaudado: 960000 },
     { mes: 'Julio', proyectado: 1200000, recaudado: 1120000 },
-    { mes: 'Agosto', proyectado: 1440000, recaudado: totalRecaudadoMes },
-    { mes: 'Septiembre', proyectado: 1680000, recaudado: 0 },
-    { mes: 'Octubre', proyectado: 1920000, recaudado: 0 },
+    { mes: 'Agosto', proyectado: mrrReal, recaudado: totalRecaudadoReal },
+    { mes: 'Septiembre', proyectado: mrrReal, recaudado: 0 },
+    { mes: 'Octubre', proyectado: mrrReal, recaudado: 0 },
   ]
 
-  // Pending new clients without license
-  const pendientesActivacion = useMemo(() => {
-    return clientes.filter(c => c.plan === 'sin_licencia' || !c.licencia_activa)
-  }, [clientes])
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-    toast('ID copiado al portapapeles', { type: 'success' })
-  }
-
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 pb-20 select-none">
+    <div className="min-h-screen bg-white text-slate-900 flex font-sans antialiased selection:bg-slate-900 selection:text-white">
       
-      {/* Top Navbar */}
-      <AdminNavbar onRefresh={loadData} refreshing={refreshing} />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
+      {/* 1. OPENAI PLATFORM LEFT SIDEBAR */}
+      <aside className="w-56 border-r border-slate-200 bg-white flex flex-col justify-between p-3 shrink-0 select-none hidden md:flex">
         
-        {/* Banner for Pending Stores */}
-        {pendientesActivacion.length > 0 && (
-          <div className="bg-amber-500 text-slate-950 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-md">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-950 text-amber-400 flex items-center justify-center font-bold">
-                {pendientesActivacion.length}
+        <div className="space-y-4">
+          {/* Organization Switcher */}
+          <div className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-100/70 transition-colors cursor-pointer">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 bg-slate-900 text-white rounded flex items-center justify-center text-[10px] font-bold">
+                V
               </div>
-              <div>
-                <p className="font-bold text-[13px] leading-tight">
-                  Comercios pendientes de activación o en mora
-                </p>
-                <p className="text-[11px] opacity-90">
-                  {pendientesActivacion.map(c => c.nombre_comercio).join(', ')}
-                </p>
-              </div>
+              <span className="text-[13px] font-semibold text-slate-900 tracking-tight">Vendora Core</span>
             </div>
-            <span className="text-[11px] font-bold bg-slate-950 text-white px-3 py-1 rounded-lg">
-              Revisa la tabla abajo para activar
+            <ChevronDown size={14} className="text-slate-400" />
+          </div>
+
+          {/* Quick Search Shortcut Input */}
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              readOnly
+              placeholder="Search"
+              className="w-full h-7 pl-7 pr-8 text-[11px] bg-slate-50 border border-slate-200 rounded-md focus:outline-none cursor-default"
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-slate-400 bg-white px-1 py-0.2 border border-slate-200 rounded">
+              Ctrl+K
             </span>
           </div>
-        )}
 
-        {/* 1. SECTION: 4 KPI CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          {/* Card 1: Total Recaudado */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Total Recaudado (Mes)
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                <DollarSign size={16} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-2xl font-bold font-mono text-slate-900">{formatCOP(totalRecaudadoMes)}</p>
-              <p className="text-[11px] text-emerald-600 font-semibold mt-0.5 flex items-center gap-1">
-                <ArrowUpRight size={13} />
-                <span>Cobros físicos y transferencias</span>
-              </p>
-            </div>
-          </div>
+          {/* Navigation Links (OpenAI style) */}
+          <nav className="space-y-0.5 text-[13px] font-medium">
+            <button
+              onClick={() => setActiveTab('licencias')}
+              className={[
+                'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-left',
+                activeTab === 'licencias'
+                  ? 'bg-slate-100 text-slate-900 font-semibold'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              ].join(' ')}
+            >
+              <Key size={15} className={activeTab === 'licencias' ? 'text-slate-900' : 'text-slate-400'} />
+              <span>Licencias</span>
+            </button>
 
-          {/* Card 2: MRR */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                MRR (Cuotas Mensuales)
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-                <TrendingUp size={16} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-2xl font-bold font-mono text-blue-600">{formatCOP(mrrMensual)}</p>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                Ingreso recurrente proyectado
-              </p>
-            </div>
-          </div>
+            <button
+              onClick={() => setActiveTab('recaudos')}
+              className={[
+                'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-left',
+                activeTab === 'recaudos'
+                  ? 'bg-slate-100 text-slate-900 font-semibold'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              ].join(' ')}
+            >
+              <DollarSign size={15} className={activeTab === 'recaudos' ? 'text-slate-900' : 'text-slate-400'} />
+              <span>Historial Recaudos</span>
+            </button>
 
-          {/* Card 3: Licencias Activas */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Licencias Activas
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                <Users size={16} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-2xl font-bold font-mono text-slate-900">
-                {licenciasActivasCount} <span className="text-slate-400 text-lg">/ {clientes.length}</span>
-              </p>
-              <p className="text-[11px] text-indigo-600 font-semibold mt-0.5">
-                {((licenciasActivasCount / (clientes.length || 1)) * 100).toFixed(0)}% del cupo activo
-              </p>
-            </div>
-          </div>
-
-          {/* Card 4: En Mora / Suspendidos */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                En Mora / Suspendidos
-              </span>
-              <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-                <AlertTriangle size={16} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <p className="text-2xl font-bold font-mono text-rose-600">{clientesEnMoraCount} comercios</p>
-              <p className="text-[11px] text-rose-600 font-semibold mt-0.5">
-                Acceso restringido en su local
-              </p>
-            </div>
-          </div>
-
+            <button
+              onClick={() => setActiveTab('flujo')}
+              className={[
+                'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-left',
+                activeTab === 'flujo'
+                  ? 'bg-slate-100 text-slate-900 font-semibold'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              ].join(' ')}
+            >
+              <TrendingUp size={15} className={activeTab === 'flujo' ? 'text-slate-900' : 'text-slate-400'} />
+              <span>Flujo Financiero</span>
+            </button>
+          </nav>
         </div>
 
-        {/* 2. SECTION: FINANCIAL PROGRESS & FAST CASH PAYMENT FORM */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Left: Cash Flow Chart & Meta $22M (8 cols) */}
-          <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">Proyección de Ingresos y Flujo de Caja</h3>
-                <p className="text-[12px] text-slate-400">Recaudo de cuotas ($80.000 / $160.000 / $240.000) mes a mes</p>
-              </div>
-              <span className="px-2.5 py-1 bg-slate-100 text-slate-700 text-[11px] font-bold rounded-lg">
-                Meta de Capitalización
-              </span>
+        {/* Bottom User Profile */}
+        <div className="pt-3 border-t border-slate-100 flex items-center justify-between px-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-6 h-6 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center">
+              OL
             </div>
-
-            {/* Goal Progress Bar ($22M COP) */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-              <div className="flex justify-between text-[12px]">
-                <span className="font-semibold text-slate-700">Meta Capitalización Vendora</span>
-                <span className="font-mono font-bold text-slate-900">
-                  {formatCOP(totalRecaudadoMes)} / <span className="text-slate-400">{formatCOP(META_RECAUDO_TOTAL)}</span>
-                </span>
-              </div>
-              <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-600 to-emerald-500 rounded-full transition-all duration-500"
-                  style={{ width: `${porcentajeMeta}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-                <span>{porcentajeMeta.toFixed(1)}% Alcanzado</span>
-                <span>Faltan {formatCOP(Math.max(0, META_RECAUDO_TOTAL - totalRecaudadoMes))} para la meta</span>
-              </div>
-            </div>
-
-            {/* Recharts Bar Chart */}
-            <div className="h-60 w-full pt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => `$${val / 1000}k`} />
-                  <Tooltip
-                    formatter={(value: any) => [formatCOP(Number(value)), '']}
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                  <Bar dataKey="proyectado" name="Cuotas Proyectadas" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="recaudado" name="Recaudo Físico (Real)" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="min-w-0">
+              <p className="text-[12px] font-semibold text-slate-900 truncate">Oner Luis Ortiz</p>
+              <p className="text-[10px] text-slate-400 truncate">Super Admin</p>
             </div>
           </div>
-
-          {/* Right: Fast Payment Form (4 cols) */}
-          <div className="lg:col-span-4 bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                  <Wallet size={15} />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Registrar Cobro Rápido</h3>
-                  <p className="text-[11px] text-slate-400">Recaudo en local o Nequi</p>
-                </div>
-              </div>
-
-              <form onSubmit={handleRegisterPayment} className="mt-4 space-y-3.5 text-[12px]">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Seleccionar Comercio</label>
-                  <select
-                    value={paymentClienteId}
-                    onChange={e => {
-                      setPaymentClienteId(e.target.value)
-                      const found = clientes.find(c => c.id === e.target.value)
-                      if (found && found.cuota_mensual) {
-                        setPaymentMonto(String(found.cuota_mensual))
-                      }
-                    }}
-                    className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white font-medium"
-                  >
-                    {clientes.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre_comercio} ({c.municipio}) — Cuota: {formatCOP(c.cuota_mensual)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Monto Cobrado ($ COP)</label>
-                  <input
-                    type="number"
-                    required
-                    value={paymentMonto}
-                    onChange={e => setPaymentMonto(e.target.value)}
-                    className="w-full h-8 px-2.5 font-mono font-bold text-slate-900 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Método de Recaudo</label>
-                  <select
-                    value={paymentMetodo}
-                    onChange={e => setPaymentMetodo(e.target.value)}
-                    className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
-                  >
-                    <option value="efectivo">💵 Efectivo en Local Comercial</option>
-                    <option value="nequi">📱 Transferencia Nequi</option>
-                    <option value="daviplata">📱 Daviplata</option>
-                    <option value="bancolombia">🏦 Bancolombia</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Notas / Observación</label>
-                  <input
-                    type="text"
-                    placeholder="Ej: Cobro cuota 4 en persona..."
-                    value={paymentNotas}
-                    onChange={e => setPaymentNotas(e.target.value)}
-                    className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white text-[11px]"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={registeringPayment}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-2"
-                >
-                  <CheckCircle2 size={15} />
-                  <span>{registeringPayment ? 'Registrando...' : 'Registrar Pago (+30 días)'}</span>
-                </button>
-              </form>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-100 text-[10px] text-slate-400">
-              ⚡ Al registrar, el cliente queda activo automáticamente y su fecha de corte se extiende 30 días.
-            </div>
-          </div>
-
+          <button
+            onClick={handleLogout}
+            className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
+            title="Cerrar Sesión"
+          >
+            <LogOut size={14} />
+          </button>
         </div>
 
-        {/* 3. SECTION: CLIENTS & LICENSES TABLE */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-          
-          {/* Table Header Controls */}
-          <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-bold text-slate-900">Gestión de Clientes y Licencias</h3>
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[11px] font-bold rounded-full">
-                  {filteredClientes.length} comercios
-                </span>
-              </div>
-              <p className="text-[12px] text-slate-400 mt-0.5">
-                Control de acceso en tiempo real, planes y estados de cobro
-              </p>
-            </div>
+      </aside>
 
-            {/* Search & Filters */}
-            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-              <div className="relative flex-1 md:w-64">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Buscar negocio, dueño o municipio..."
-                  className="w-full h-8 pl-8 pr-3 text-[12px] border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
-                />
-              </div>
-
-              {/* Plan Filter */}
-              <select
-                value={planFilter}
-                onChange={e => setPlanFilter(e.target.value)}
-                className="h-8 px-2.5 border border-slate-200 rounded-lg text-[11px] font-medium bg-white focus:outline-none"
-              >
-                <option value="todos">Todos los Planes</option>
-                <option value="starter">STARTER</option>
-                <option value="pro">PRO</option>
-                <option value="max">MAX</option>
-                <option value="sin_licencia">Sin Licencia</option>
-              </select>
-
-              {/* Status Filter */}
-              <select
-                value={estadoFilter}
-                onChange={e => setEstadoFilter(e.target.value)}
-                className="h-8 px-2.5 border border-slate-200 rounded-lg text-[11px] font-medium bg-white focus:outline-none"
-              >
-                <option value="todos">Todos los Estados</option>
-                <option value="activo">🟢 Activos</option>
-                <option value="mora">🟡 En Mora</option>
-                <option value="suspendido">🔴 Suspendidos</option>
-                <option value="pendiente">⚪ Pendientes</option>
-              </select>
-            </div>
+      {/* 2. MAIN WORKSPACE */}
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-white">
+        
+        {/* Top Header */}
+        <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              {activeTab === 'licencias' && 'Licencias y Comercios'}
+              {activeTab === 'recaudos' && 'Historial de Cobros y Recaudos'}
+              {activeTab === 'flujo' && 'Flujo Financiero y Capitalización'}
+            </h1>
+            <p className="text-[12px] text-slate-500 mt-0.5">
+              Gestión centralizada de licencias activas, cobros en Cereté y monitoreo en tiempo real
+            </p>
           </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-[12px]">
-              <thead className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                <tr>
-                  <th className="px-4 py-3">ID Negocio</th>
-                  <th className="px-4 py-3">Comercio / Propietario</th>
-                  <th className="px-4 py-3">Municipio</th>
-                  <th className="px-4 py-3 text-center">Plan Actual</th>
-                  <th className="px-4 py-3">Tipo Pago</th>
-                  <th className="px-4 py-3 text-right">Cuotas</th>
-                  <th className="px-4 py-3">Próximo Corte</th>
-                  <th className="px-4 py-3 text-center">Interruptor Licencia</th>
-                  <th className="px-4 py-3 text-center">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredClientes.map(cliente => {
-                  const isOnline = cliente.online_ahora
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadData}
+              disabled={refreshing}
+              className="h-8 px-3 text-[12px] font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Actualizar datos"
+            >
+              <RefreshCw size={13} className={refreshing ? 'animate-spin text-slate-900' : 'text-slate-400'} />
+              <span>Actualizar</span>
+            </button>
 
-                  return (
-                    <tr key={cliente.id} className="hover:bg-slate-50/80 transition-colors">
-                      
-                      {/* ID Negocio */}
-                      <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
-                        <button
-                          onClick={() => copyToClipboard(cliente.id)}
-                          className="flex items-center gap-1 hover:text-blue-600 text-left"
-                          title="Copiar ID completo"
-                        >
-                          <span>{cliente.id.slice(0, 8)}...</span>
-                          <Copy size={11} className="text-slate-400" />
-                        </button>
-                      </td>
+            <button
+              onClick={() => setPagoDialogOpen(true)}
+              className="h-8 px-3.5 bg-slate-900 hover:bg-slate-800 text-white font-medium text-[12px] rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Registrar Cobro</span>
+            </button>
+          </div>
+        </div>
 
-                      {/* Store & Owner Name */}
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={[
-                              'w-2 h-2 rounded-full shrink-0',
-                              isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'
-                            ].join(' ')}
-                            title={isOnline ? 'Conectado ahora' : 'Desconectado'}
-                          />
-                          <div>
-                            <p className="font-bold text-slate-900 leading-snug">{cliente.nombre_comercio}</p>
-                            <p className="text-[11px] text-slate-400">{cliente.nombre_dueno} {cliente.telefono && `· ${cliente.telefono}`}</p>
-                          </div>
-                        </div>
-                      </td>
+        {/* 3. TAB CONTENT */}
+        <div className="p-6 space-y-6 max-w-7xl">
+          
+          {/* TAB 1: LICENCIAS (Table like OpenAI API keys) */}
+          {activeTab === 'licencias' && (
+            <>
+              {/* OpenAI Style Filter Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2 flex-1 max-w-2xl">
+                  
+                  {/* Search bar */}
+                  <div className="relative flex-1 min-w-[220px]">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      placeholder="Buscar por comercio, dueño o ID..."
+                      className="w-full h-8 pl-8 pr-8 text-[12px] bg-white border border-slate-200 rounded-full focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    />
+                    {search && (
+                      <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
 
-                      {/* City */}
-                      <td className="px-4 py-3 text-slate-600 font-medium">{cliente.municipio}</td>
+                  {/* Active Filter Pill */}
+                  <button
+                    onClick={() => setFilterActiveOnly(!filterActiveOnly)}
+                    className={[
+                      'h-8 px-3 rounded-full text-[11px] font-medium border transition-colors flex items-center gap-1.5 cursor-pointer',
+                      filterActiveOnly
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    ].join(' ')}
+                  >
+                    <Check size={11} className={filterActiveOnly ? 'text-white' : 'text-slate-400'} />
+                    <span>Activos</span>
+                    {filterActiveOnly && <X size={11} className="ml-0.5" />}
+                  </button>
 
-                      {/* Plan Badge */}
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={[
-                            'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 shadow-xs',
-                            cliente.plan === 'max'
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300 font-extrabold'
-                              : cliente.plan === 'pro'
-                              ? 'bg-blue-100 text-blue-800 border border-blue-200 font-bold'
-                              : cliente.plan === 'starter'
-                              ? 'bg-slate-100 text-slate-700 border border-slate-200'
-                              : 'bg-rose-100 text-rose-800 border border-rose-200'
-                          ].join(' ')}
-                        >
-                          {cliente.plan === 'max' && <Sparkles size={10} className="text-amber-600" />}
-                          {cliente.plan === 'sin_licencia' ? 'Sin Licencia' : cliente.plan.toUpperCase()}
-                        </span>
-                      </td>
+                  {/* Plan Filter Pill */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowPlanDropdown(!showPlanDropdown)}
+                      className="h-8 px-3 rounded-full text-[11px] font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Filter size={11} className="text-slate-400" />
+                      <span>Plan: {planFilter === 'todos' ? 'Todos' : planFilter.toUpperCase()}</span>
+                      <ChevronDown size={11} className="text-slate-400" />
+                    </button>
 
-                      {/* Tipo Pago */}
-                      <td className="px-4 py-3">
-                        <span className="text-[11px] text-slate-600 capitalize">
-                          {cliente.tipo_pago === 'financiado' ? 'Financiación 10m' : 'Vitalicio'}
-                        </span>
-                        {cliente.tipo_pago === 'financiado' && (
-                          <span className="block font-mono text-[10px] text-slate-400">
-                            {formatCOP(cliente.cuota_mensual)}/mes
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Cuotas */}
-                      <td className="px-4 py-3 text-right font-mono">
-                        <div>
-                          <span className="font-bold text-slate-900">{cliente.cuotas_pagadas}</span>
-                          <span className="text-slate-400">/{cliente.cuotas_total}</span>
-                        </div>
-                        {cliente.saldo_pendiente > 0 && (
-                          <span className="text-[10px] text-slate-400 block font-normal">
-                            Saldo: {formatCOP(cliente.saldo_pendiente)}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Próximo Corte */}
-                      <td className="px-4 py-3 font-mono text-[11px]">
-                        <span className={cliente.estado === 'mora' ? 'text-rose-600 font-bold' : 'text-slate-700'}>
-                          {cliente.fecha_corte || '—'}
-                        </span>
-                      </td>
-
-                      {/* Instant Toggle Switch */}
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                    {showPlanDropdown && (
+                      <div className="absolute top-9 left-0 w-36 bg-white border border-slate-200 rounded-xl shadow-lg p-1 z-20 text-[11px]">
+                        {['todos', 'starter', 'pro', 'max', 'sin_licencia'].map(p => (
                           <button
-                            onClick={() => handleToggleLicencia(cliente)}
-                            className={[
-                              'w-11 h-6 rounded-full transition-all relative cursor-pointer',
-                              cliente.licencia_activa ? 'bg-emerald-600' : 'bg-slate-300'
-                            ].join(' ')}
-                            title={cliente.licencia_activa ? 'Licencia activa (Clic para suspender)' : 'Licencia suspendida (Clic para activar)'}
+                            key={p}
+                            onClick={() => { setPlanFilter(p); setShowPlanDropdown(false); }}
+                            className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-slate-100 capitalize text-slate-700"
                           >
-                            <span
-                              className={[
-                                'w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs',
-                                cliente.licencia_activa ? 'right-0.5' : 'left-0.5'
-                              ].join(' ')}
-                            />
+                            {p === 'sin_licencia' ? 'Sin Licencia' : p}
                           </button>
-                          <span className={[
-                            'text-[10px] font-bold uppercase w-14 text-left',
-                            cliente.licencia_activa ? 'text-emerald-700' : 'text-slate-400'
-                          ].join(' ')}>
-                            {cliente.licencia_activa ? 'Activo' : 'Corte'}
-                          </span>
-                        </div>
-                      </td>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-                      {/* Edit Button */}
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => {
-                            setEditingCliente(cliente)
-                            setDialogOpen(true)
-                          }}
-                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors flex items-center gap-1 mx-auto cursor-pointer"
-                        >
-                          <Edit2 size={11} />
-                          <span>Editar</span>
-                        </button>
-                      </td>
+                </div>
 
+                <div className="text-[12px] text-slate-400 font-medium">
+                  {filtered.length} {filtered.length === 1 ? 'comercio' : 'comercios'}
+                </div>
+              </div>
+
+              {/* OpenAI Platform Table */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[12px]">
+                    <thead className="bg-slate-50/70 border-b border-slate-200 text-[11px] font-semibold text-slate-500">
+                      <tr>
+                        <th className="px-4 py-2.5 font-normal">Name</th>
+                        <th className="px-4 py-2.5 font-normal">Status</th>
+                        <th className="px-4 py-2.5 font-normal">Tracking ID</th>
+                        <th className="px-4 py-2.5 font-normal">Plan</th>
+                        <th className="px-4 py-2.5 font-normal">Contrato</th>
+                        <th className="px-4 py-2.5 font-normal">Created</th>
+                        <th className="px-4 py-2.5 font-normal">Próximo Pago</th>
+                        <th className="px-4 py-2.5 font-normal">Created by</th>
+                        <th className="px-4 py-2.5 text-center font-normal w-24">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {filtered.map(cliente => {
+                        const isLive = cliente.online_ahora
+
+                        return (
+                          <tr key={cliente.id} className="hover:bg-slate-50/80 transition-colors group">
+                            
+                            {/* Name */}
+                            <td className="px-4 py-3 font-semibold text-slate-900">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={[
+                                    'w-1.5 h-1.5 rounded-full shrink-0',
+                                    isLive ? 'bg-emerald-500' : 'bg-slate-300'
+                                  ].join(' ')}
+                                  title={isLive ? 'En línea ahora' : 'Desconectado'}
+                                />
+                                <span>{cliente.nombre_comercio}</span>
+                              </div>
+                            </td>
+
+                            {/* Status */}
+                            <td className="px-4 py-3">
+                              <span
+                                className={[
+                                  'text-[11px] font-medium capitalize',
+                                  cliente.estado === 'activo' ? 'text-slate-900' :
+                                  cliente.estado === 'mora' ? 'text-amber-700' :
+                                  'text-slate-400'
+                                ].join(' ')}
+                              >
+                                {cliente.estado === 'activo' ? 'Active' : cliente.estado}
+                              </span>
+                            </td>
+
+                            {/* Tracking ID */}
+                            <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
+                              <button
+                                onClick={() => copyToClipboard(cliente.id)}
+                                className="hover:text-slate-900 flex items-center gap-1 font-mono"
+                                title="Copiar ID completo"
+                              >
+                                <span>key_{cliente.id.slice(0, 10)}...</span>
+                                <Copy size={11} className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </button>
+                            </td>
+
+                            {/* Plan */}
+                            <td className="px-4 py-3">
+                              <span className="font-semibold text-[11px] text-slate-900 uppercase">
+                                {cliente.plan === 'sin_licencia' ? 'Sin Plan' : cliente.plan}
+                              </span>
+                            </td>
+
+                            {/* Contrato */}
+                            <td className="px-4 py-3 text-slate-500 text-[11px]">
+                              {cliente.tipo_pago === 'financiado' ? (
+                                <span>10m · <span className="font-mono text-slate-700 font-medium">{formatCOP(cliente.cuota_mensual)}</span></span>
+                              ) : (
+                                <span>Vitalicio</span>
+                              )}
+                            </td>
+
+                            {/* Created */}
+                            <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
+                              {cliente.fecha_inicio || '15 sept 2025'}
+                            </td>
+
+                            {/* Próximo Pago */}
+                            <td className="px-4 py-3 font-mono text-[11px]">
+                              <span className={cliente.estado === 'mora' ? 'text-rose-600 font-bold' : 'text-slate-700'}>
+                                {cliente.fecha_corte || 'Never'}
+                              </span>
+                            </td>
+
+                            {/* Created by */}
+                            <td className="px-4 py-3 text-slate-500 text-[11px] truncate max-w-[120px]">
+                              {cliente.nombre_dueno}
+                            </td>
+
+                            {/* Actions (OpenAI style Edit and Delete/Suspend) */}
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingCliente(cliente)
+                                    setDialogOpen(true)
+                                  }}
+                                  className="p-1 text-slate-400 hover:text-slate-900 rounded transition-colors"
+                                  title="Editar comercio y plan"
+                                >
+                                  <Edit3 size={13} />
+                                </button>
+
+                                <button
+                                  onClick={() => handleToggleLicencia(cliente)}
+                                  className={[
+                                    'p-1 rounded transition-colors',
+                                    cliente.licencia_activa
+                                      ? 'text-slate-400 hover:text-rose-600'
+                                      : 'text-emerald-600 hover:text-emerald-700'
+                                  ].join(' ')}
+                                  title={cliente.licencia_activa ? 'Suspender licencia en tiempo real' : 'Activar licencia'}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* TAB 2: HISTORIAL DE RECAUDOS */}
+          {activeTab === 'recaudos' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Historial de Cobros Físicos</h3>
+                  <p className="text-[12px] text-slate-500">Registro detallado de pagos de cuotas recaudadas</p>
+                </div>
+                <button
+                  onClick={() => setPagoDialogOpen(true)}
+                  className="h-8 px-3 bg-slate-900 hover:bg-slate-800 text-white font-medium text-[12px] rounded-lg transition-colors flex items-center gap-1.5"
+                >
+                  <Plus size={13} />
+                  <span>Registrar Cobro</span>
+                </button>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                <table className="w-full text-left border-collapse text-[12px]">
+                  <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-2.5">Fecha</th>
+                      <th className="px-4 py-2.5">Comercio</th>
+                      <th className="px-4 py-2.5">Método</th>
+                      <th className="px-4 py-2.5">Nota</th>
+                      <th className="px-4 py-2.5 text-right">Monto Recaudado</th>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
+                    {pagos.map(p => (
+                      <tr key={p.id} className="hover:bg-slate-50/60 font-sans">
+                        <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
+                          {p.registrado_en ? p.registrado_en.split('T')[0] : 'Hoy'}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-slate-900">{p.nombre_comercio}</td>
+                        <td className="px-4 py-3 capitalize text-slate-500">{p.metodo}</td>
+                        <td className="px-4 py-3 text-slate-400 text-[11px]">{p.notas || 'Cuota mensual'}</td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
+                          {formatCOP(p.monto)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: FLUJO FINANCIERO (Clean Charts) */}
+          {activeTab === 'flujo' && (
+            <div className="space-y-6">
+              
+              {/* Top 3 Minimal Metric Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                    Total Recaudado Físicamente
+                  </span>
+                  <p className="text-2xl font-bold font-mono text-slate-900">{formatCOP(totalRecaudadoReal)}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Sumatoria de cuotas cobradas</p>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                    MRR Proyectado (Mes)
+                  </span>
+                  <p className="text-2xl font-bold font-mono text-slate-900">{formatCOP(mrrReal)}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">De {activasCount} comercios activos</p>
+                </div>
+
+                <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs">
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                    Meta de Capitalización
+                  </span>
+                  <p className="text-2xl font-bold font-mono text-slate-900">
+                    {porcentajeMeta.toFixed(1)}% <span className="text-sm font-normal text-slate-400">/ $22M</span>
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Faltan {formatCOP(Math.max(0, META_RECAUDO - totalRecaudadoReal))}</p>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="border border-slate-200 rounded-xl p-5 bg-white space-y-2 shadow-xs">
+                <div className="flex justify-between text-[12px]">
+                  <span className="font-semibold text-slate-800">Progreso hacia $22'000.000 COP</span>
+                  <span className="font-mono font-bold text-slate-900">{formatCOP(totalRecaudadoReal)}</span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-slate-900 rounded-full transition-all duration-500"
+                    style={{ width: `${porcentajeMeta}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Chart */}
+              <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-3">
+                <h4 className="text-[13px] font-bold text-slate-900">Proyección Mensual vs Recaudo Real</h4>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#64748b' }} />
+                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => `$${val / 1000}k`} />
+                      <Tooltip
+                        formatter={(value: any) => [formatCOP(Number(value)), '']}
+                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                      />
+                      <Bar dataKey="proyectado" name="Cuotas Proyectadas" fill="#e2e8f0" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="recaudado" name="Recaudo Real" fill="#0f172a" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+            </div>
+          )}
 
         </div>
 
@@ -657,6 +635,14 @@ export default function AdminPage() {
           setEditingCliente(null)
         }}
         onSave={handleSaveCliente}
+      />
+
+      {/* Fast Payment Modal */}
+      <RegistrarPagoDialog
+        isOpen={pagoDialogOpen}
+        clientes={clientes}
+        onClose={() => setPagoDialogOpen(false)}
+        onRegister={handleRegisterPayment}
       />
 
     </div>

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { VendoraCliente, PlanType, EstadoCliente, TipoPago } from '../../services/adminService'
-import { formatCOP } from '../../lib/utils'
-import { X, Save, Shield, Store, Calendar, Wallet } from 'lucide-react'
+import { X, Save } from 'lucide-react'
 
 interface ClienteDialogProps {
   isOpen: boolean
@@ -72,25 +71,28 @@ export default function ClienteDialog({ isOpen, cliente, onClose, onSave }: Clie
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl border border-slate-200 w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl border border-slate-200 w-full max-w-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         
-        {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+        {/* OpenAI Platform Header */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-slate-900">Editar Suscripción y Licencia</h3>
-            <p className="text-[11px] text-slate-500 font-mono">ID: {cliente.id.slice(0, 16)}...</p>
+            <h3 className="text-[14px] font-bold text-slate-900">Editar Comercio y Licencia</h3>
+            <p className="text-[11px] text-slate-400 font-mono mt-0.5">ID: {cliente.id}</p>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-200/60">
-            <X size={18} />
+          <button
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors"
+          >
+            <X size={16} />
           </button>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-4 text-[13px] max-h-[75vh] overflow-y-auto">
+          <div className="p-5 space-y-3.5 text-[12px]">
             
-            {/* Store & Owner Name */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Store & Owner */}
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Nombre del Comercio</label>
                 <input
@@ -98,7 +100,7 @@ export default function ClienteDialog({ isOpen, cliente, onClose, onSave }: Clie
                   required
                   value={nombreComercio}
                   onChange={e => setNombreComercio(e.target.value)}
-                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
                 />
               </div>
               <div>
@@ -108,20 +110,20 @@ export default function ClienteDialog({ isOpen, cliente, onClose, onSave }: Clie
                   required
                   value={nombreDueno}
                   onChange={e => setNombreDueno(e.target.value)}
-                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
                 />
               </div>
             </div>
 
-            {/* Email & Phone */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Email, Phone, City */}
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="font-semibold text-slate-700 block mb-1">Email Acceso</label>
+                <label className="font-semibold text-slate-700 block mb-1">Email</label>
                 <input
                   type="email"
                   value={emailAcceso}
                   onChange={e => setEmailAcceso(e.target.value)}
-                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
                 />
               </div>
               <div>
@@ -130,7 +132,7 @@ export default function ClienteDialog({ isOpen, cliente, onClose, onSave }: Clie
                   type="text"
                   value={telefono}
                   onChange={e => setTelefono(e.target.value)}
-                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
                 />
               </div>
               <div>
@@ -139,99 +141,67 @@ export default function ClienteDialog({ isOpen, cliente, onClose, onSave }: Clie
                   type="text"
                   value={municipio}
                   onChange={e => setMunicipio(e.target.value)}
-                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+                  className="w-full h-8 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
                 />
               </div>
             </div>
 
-            {/* Plan & License status */}
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
-                Configuración del Plan Vendora
-              </span>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1 text-[12px]">Plan Asignado</label>
-                  <select
-                    value={plan}
-                    onChange={e => setPlan(e.target.value as PlanType)}
-                    className="w-full h-8 px-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white font-bold"
-                  >
-                    <option value="starter">STARTER (Básico)</option>
-                    <option value="pro">PRO (Recomendado)</option>
-                    <option value="max">MAX (Full Contabilidad)</option>
-                    <option value="sin_licencia">SIN LICENCIA</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1 text-[12px]">Tipo de Contrato</label>
-                  <select
-                    value={tipoPago}
-                    onChange={e => setTipoPago(e.target.value as TipoPago)}
-                    className="w-full h-8 px-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
-                  >
-                    <option value="financiado">Financiación 10 Meses</option>
-                    <option value="vitalicio">Suscripción de por vida</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1 text-[12px]">Estado del Cliente</label>
-                  <select
-                    value={estado}
-                    onChange={e => {
-                      const st = e.target.value as EstadoCliente
-                      setEstado(st)
-                      setLicenciaActiva(st === 'activo')
-                    }}
-                    className="w-full h-8 px-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white font-bold"
-                  >
-                    <option value="activo">🟢 ACTIVO</option>
-                    <option value="mora">🟡 EN MORA</option>
-                    <option value="suspendido">🔴 SUSPENDIDO</option>
-                    <option value="pendiente">⚪ PENDIENTE</option>
-                  </select>
-                </div>
+            {/* Plan & Contract */}
+            <div className="grid grid-cols-3 gap-3 pt-1">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Plan</label>
+                <select
+                  value={plan}
+                  onChange={e => setPlan(e.target.value as PlanType)}
+                  className="w-full h-8 px-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white font-medium"
+                >
+                  <option value="starter">STARTER</option>
+                  <option value="pro">PRO</option>
+                  <option value="max">MAX</option>
+                  <option value="sin_licencia">Sin Licencia</option>
+                </select>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
-                <div>
-                  <p className="font-bold text-slate-800 text-[12px]">Interruptor de Licencia</p>
-                  <p className="text-[10px] text-slate-400">Si se apaga, el comercio verá la pantalla de bloqueo en su local al instante.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !licenciaActiva
-                    setLicenciaActiva(next)
-                    setEstado(next ? 'activo' : 'suspendido')
-                  }}
-                  className={[
-                    'w-12 h-6 rounded-full transition-colors relative cursor-pointer',
-                    licenciaActiva ? 'bg-emerald-600' : 'bg-slate-300'
-                  ].join(' ')}
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Contrato</label>
+                <select
+                  value={tipoPago}
+                  onChange={e => setTipoPago(e.target.value as TipoPago)}
+                  className="w-full h-8 px-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
                 >
-                  <span
-                    className={[
-                      'w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs',
-                      licenciaActiva ? 'right-0.5' : 'left-0.5'
-                    ].join(' ')}
-                  />
-                </button>
+                  <option value="financiado">Financiación 10m</option>
+                  <option value="vitalicio">Vitalicio</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Estado</label>
+                <select
+                  value={estado}
+                  onChange={e => {
+                    const st = e.target.value as EstadoCliente
+                    setEstado(st)
+                    setLicenciaActiva(st === 'activo')
+                  }}
+                  className="w-full h-8 px-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white font-medium"
+                >
+                  <option value="activo">Activo</option>
+                  <option value="mora">En Mora</option>
+                  <option value="suspendido">Suspendido</option>
+                  <option value="pendiente">Pendiente</option>
+                </select>
               </div>
             </div>
 
-            {/* Financial Tracking */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            {/* Financial tracking */}
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Cuota Mensual ($)</label>
                 <input
                   type="number"
                   value={cuotaMensual}
                   onChange={e => setCuotaMensual(e.target.value)}
-                  className="w-full h-8 px-2.5 font-mono border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+                  className="w-full h-8 px-2.5 font-mono border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
                 />
               </div>
 
@@ -241,17 +211,7 @@ export default function ClienteDialog({ isOpen, cliente, onClose, onSave }: Clie
                   type="number"
                   value={cuotasPagadas}
                   onChange={e => setCuotasPagadas(e.target.value)}
-                  className="w-full h-8 px-2.5 font-mono border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Saldo Pendiente ($)</label>
-                <input
-                  type="number"
-                  value={saldoPendiente}
-                  onChange={e => setSaldoPendiente(e.target.value)}
-                  className="w-full h-8 px-2.5 font-mono border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+                  className="w-full h-8 px-2.5 font-mono border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
                 />
               </div>
 
@@ -261,28 +221,55 @@ export default function ClienteDialog({ isOpen, cliente, onClose, onSave }: Clie
                   type="date"
                   value={fechaCorte}
                   onChange={e => setFechaCorte(e.target.value)}
-                  className="w-full h-8 px-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white"
+                  className="w-full h-8 px-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-900 bg-white"
                 />
               </div>
+            </div>
+
+            {/* Switch Toggle */}
+            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200 mt-2">
+              <div>
+                <p className="font-semibold text-slate-800 text-[12px]">Estado de Licencia en Vivo</p>
+                <p className="text-[10px] text-slate-400">Si se desactiva, el comerciante queda bloqueado al instante.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !licenciaActiva
+                  setLicenciaActiva(next)
+                  setEstado(next ? 'activo' : 'suspendido')
+                }}
+                className={[
+                  'w-11 h-6 rounded-full transition-colors relative cursor-pointer',
+                  licenciaActiva ? 'bg-slate-900' : 'bg-slate-300'
+                ].join(' ')}
+              >
+                <span
+                  className={[
+                    'w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs',
+                    licenciaActiva ? 'right-0.5' : 'left-0.5'
+                  ].join(' ')}
+                />
+              </button>
             </div>
 
           </div>
 
           {/* Modal Footer */}
-          <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+          <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 text-[12px] font-semibold rounded-lg transition-colors"
+              className="px-3.5 h-8 border border-slate-200 hover:bg-slate-100 text-slate-600 text-[11px] font-semibold rounded-lg transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-4 h-8 bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold rounded-lg shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              <Save size={13} />
+              <Save size={12} />
               <span>{saving ? 'Guardando...' : 'Guardar Cambios'}</span>
             </button>
           </div>
