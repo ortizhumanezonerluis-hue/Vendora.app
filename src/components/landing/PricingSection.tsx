@@ -136,15 +136,15 @@ export default function PricingSection({ onOpenDemoModal }: { onOpenDemoModal: (
                 {billingMode === 'financed' ? (
                   <div>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-extrabold text-slate-900">$ 160.000</span>
+                      <span className="text-3xl font-extrabold text-slate-900">$ 190.000</span>
                       <span className="text-[13px] font-semibold text-slate-500">/ mes (10 cuotas)</span>
                     </div>
-                    <p className="text-[11px] text-blue-600 font-semibold mt-1">Cuota Inicial: $ 600.000 COP</p>
+                    <p className="text-[11px] text-blue-600 font-semibold mt-1">Cuota Inicial: $ 700.000 COP</p>
                   </div>
                 ) : (
                   <div>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-extrabold text-slate-900">$ 2'200.000</span>
+                      <span className="text-3xl font-extrabold text-slate-900">$ 2'600.000</span>
                       <span className="text-[13px] font-semibold text-slate-500">COP único</span>
                     </div>
                     <p className="text-[11px] text-emerald-600 font-semibold mt-1">Licencia vitalicia sin mensualidades</p>

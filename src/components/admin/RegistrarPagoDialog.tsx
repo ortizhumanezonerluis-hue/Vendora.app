@@ -17,7 +17,7 @@ export default function RegistrarPagoDialog({
   onRegister
 }: RegistrarPagoDialogProps) {
   const [selectedId, setSelectedId] = useState(clientes[0]?.id || '')
-  const [monto, setMonto] = useState('160000')
+  const [monto, setMonto] = useState(String(clientes[0]?.cuota_mensual || 190000))
   const [metodo, setMetodo] = useState('efectivo')
   const [notas, setNotas] = useState('')
   const [loading, setLoading] = useState(false)

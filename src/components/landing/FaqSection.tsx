@@ -20,7 +20,7 @@ const FAQS = [
   },
   {
     q: '¿Cómo funciona la financiación en 10 cuotas sin bancos?',
-    a: 'Es un trato directo entre comerciantes. Das una cuota inicial accesible ($400.000, $600.000 o $800.000 según el plan) y el saldo restante lo pagas en 10 mensualidades fijas. Sin Datacrédito, sin bancos y sin trámites engorrosos.'
+    a: 'Es un trato directo entre comerciantes. Das una cuota inicial accesible ($400.000, $700.000 o $800.000 según el plan) y el saldo restante lo pagas en 10 mensualidades fijas. Sin Datacrédito, sin bancos y sin trámites engorrosos.'
   },
   {
     q: '¿Qué pasa si se va el internet en mi local?',

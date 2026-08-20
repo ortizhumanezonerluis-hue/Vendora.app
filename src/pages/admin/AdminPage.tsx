@@ -140,9 +140,17 @@ export default function AdminPage() {
   }, [clientes, search, filterActiveOnly, planFilter])
 
   // Calculated stats (Dynamic & Real)
+  // Se alimenta de:
+  // 1. La sumatoria de todos los cobros registrados en el historial (pagos_admin)
+  // 2. O la sumatoria de las cuotas ya cobradas a los comercios (cuotas_pagadas * cuota_mensual en vendora_clientes)
   const totalRecaudadoReal = useMemo(() => {
-    return pagos.reduce((s, p) => s + (Number(p.monto) || 0), 0)
-  }, [pagos])
+    const sumaPagos = pagos.reduce((s, p) => s + (Number(p.monto) || 0), 0)
+    const sumaCuotasClientes = clientes.reduce((s, c) => {
+      const cuotasCobro = (Number(c.cuotas_pagadas) || 0) * (Number(c.cuota_mensual) || 0)
+      return s + cuotasCobro
+    }, 0)
+    return Math.max(sumaPagos, sumaCuotasClientes)
+  }, [pagos, clientes])
 
   const mrrReal = useMemo(() => {
     return clientes
@@ -166,14 +174,16 @@ export default function AdminPage() {
   const porcentajeMeta = Math.min(100, (totalRecaudadoReal / META_RECAUDO) * 100)
 
   // Chart data from actual monthly calculations
-  const chartData = [
-    { mes: 'Mayo', proyectado: 640000, recaudado: 640000 },
-    { mes: 'Junio', proyectado: 960000, recaudado: 960000 },
-    { mes: 'Julio', proyectado: 1200000, recaudado: 1120000 },
-    { mes: 'Agosto', proyectado: mrrReal, recaudado: totalRecaudadoReal },
-    { mes: 'Septiembre', proyectado: mrrReal, recaudado: 0 },
-    { mes: 'Octubre', proyectado: mrrReal, recaudado: 0 },
-  ]
+  const chartData = useMemo(() => {
+    return [
+      { mes: 'Mayo', proyectado: 640000, recaudado: 640000 },
+      { mes: 'Junio', proyectado: 960000, recaudado: 960000 },
+      { mes: 'Julio', proyectado: 1200000, recaudado: 1120000 },
+      { mes: 'Agosto', proyectado: mrrReal, recaudado: totalRecaudadoReal },
+      { mes: 'Septiembre', proyectado: mrrReal, recaudado: 0 },
+      { mes: 'Octubre', proyectado: mrrReal, recaudado: 0 },
+    ]
+  }, [mrrReal, totalRecaudadoReal])
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-white text-slate-900 flex font-sans antialiased selection:bg-slate-900 selection:text-white">
