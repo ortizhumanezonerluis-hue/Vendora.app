@@ -44,11 +44,11 @@ let localPagosState: PagoAdmin[] = []
 
 export const adminService = {
   // ==========================================
-  // 1. GET ALL CLIENTS (Syncs all real stores from DB)
+  // 1. GET ALL CLIENTS (Direct from Supabase DB)
   // ==========================================
   async getClientes(): Promise<VendoraCliente[]> {
     try {
-      // 1. Fetch from vendora_clientes
+      // 1. Fetch all records from vendora_clientes
       const { data: dbClientes, error } = await supabase
         .from('vendora_clientes')
         .select('*')
@@ -56,69 +56,7 @@ export const adminService = {
 
       let allList: VendoraCliente[] = dbClientes || []
 
-      // 2. Fetch existing registered stores from configuracion_negocio / usuarios
-      // to ensure stores created before the update are ALWAYS shown!
-      try {
-        const { data: configs } = await supabase
-          .from('configuracion_negocio')
-          .select('*')
-
-        const { data: users } = await supabase
-          .from('usuarios')
-          .select('*')
-          .eq('rol', 'admin')
-
-        if (configs && configs.length > 0) {
-          for (const conf of configs) {
-            const exists = allList.some(
-              c => (conf.negocio_id && c.negocio_id === conf.negocio_id) || c.nombre_comercio === conf.nombre
-            )
-
-            if (!exists) {
-              const matchedUser = users?.find(u => u.negocio_id === conf.negocio_id)
-              const autoClient: Partial<VendoraCliente> = {
-                negocio_id: conf.negocio_id,
-                nombre_comercio: conf.nombre || 'Comercio Registrado',
-                nombre_dueno: matchedUser?.nombre || 'Propietario',
-                email_acceso: matchedUser?.email || '',
-                telefono: conf.telefono || '',
-                municipio: 'Cereté',
-                plan: 'pro',
-                licencia_activa: true,
-                tipo_pago: 'financiado',
-                estado: 'activo',
-                cuota_mensual: 160000,
-                cuotas_pagadas: 1,
-                cuotas_total: 10,
-                saldo_pendiente: 1440000,
-                fecha_inicio: conf.creado_en ? conf.creado_en.split('T')[0] : new Date().toISOString().split('T')[0],
-                fecha_corte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                online_ahora: false,
-                ultima_conexion: matchedUser?.ultimo_acceso || new Date().toISOString()
-              }
-
-              // Save to vendora_clientes table so it's persisted in DB
-              try {
-                const { data: saved } = await supabase
-                  .from('vendora_clientes')
-                  .insert([autoClient])
-                  .select()
-                  .single()
-
-                if (saved) {
-                  allList.push(saved)
-                }
-              } catch (_) {
-                allList.push({ ...autoClient, id: `auto-${conf.id}` } as VendoraCliente)
-              }
-            }
-          }
-        }
-      } catch (syncErr) {
-        console.warn('Error sincronizando comercios existentes:', syncErr)
-      }
-
-      // Check real-time online presence (if last connection was < 5 min ago)
+      // 2. Check real-time online presence (if last connection was < 5 min ago)
       const now = Date.now()
       allList = allList.map(c => {
         const lastConn = c.ultima_conexion ? new Date(c.ultima_conexion).getTime() : 0
@@ -129,10 +67,8 @@ export const adminService = {
         }
       })
 
-      if (allList.length > 0) {
-        localClientesState = allList
-        return allList
-      }
+      localClientesState = allList
+      return allList
     } catch (e) {
       console.warn('Fallo al obtener vendora_clientes:', e)
     }

@@ -10,24 +10,33 @@ import {
   ChevronDown, Copy, RefreshCw, LogOut, ArrowUpRight,
   TrendingUp, DollarSign, Users, AlertTriangle, Check,
   CreditCard, LayoutDashboard, SlidersHorizontal,
-  ShieldCheck, Sparkles, Filter, PanelLeft, ArrowLeft
+  ShieldCheck, Sparkles, Filter, PanelLeft, ArrowLeft,
+  Activity, CheckCircle2, Clock, AlertCircle
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts'
 
-type AdminTab = 'licencias' | 'recaudos' | 'flujo'
+type AdminTab = 'dashboard' | 'licencias' | 'recaudos' | 'flujo'
 
 export default function AdminPage() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState<AdminTab>('licencias')
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard')
   const [clientes, setClientes] = useState<VendoraCliente[]>([])
   const [pagos, setPagos] = useState<PagoAdmin[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Collapsible sidebar state
-  const [collapsed, setCollapsed] = useState(false)
+  // Collapsible sidebar state (persisted in localStorage)
+  const [collapsed, setCollapsed] = useState(() => {
+    return localStorage.getItem('vendora_admin_sidebar_collapsed') === 'true'
+  })
+
+  const toggleCollapsed = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem('vendora_admin_sidebar_collapsed', String(next))
+  }
 
   // Filters & Search
   const [search, setSearch] = useState('')
@@ -149,6 +158,10 @@ export default function AdminPage() {
     return clientes.filter(c => c.estado === 'mora' || c.estado === 'suspendido').length
   }, [clientes])
 
+  const onlineCount = useMemo(() => {
+    return clientes.filter(c => c.online_ahora).length
+  }, [clientes])
+
   const META_RECAUDO = 22000000
   const porcentajeMeta = Math.min(100, (totalRecaudadoReal / META_RECAUDO) * 100)
 
@@ -163,19 +176,19 @@ export default function AdminPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 flex font-sans antialiased selection:bg-slate-900 selection:text-white">
+    <div className="h-screen w-screen overflow-hidden bg-white text-slate-900 flex font-sans antialiased selection:bg-slate-900 selection:text-white">
       
-      {/* 1. OPENAI PLATFORM LEFT SIDEBAR (Collapsible with PanelLeft toggle) */}
+      {/* 1. OPENAI PLATFORM LEFT SIDEBAR (Completely isolated scrolling) */}
       <aside
         className={[
-          'border-r border-slate-200 bg-white flex flex-col justify-between p-3 shrink-0 select-none hidden md:flex transition-all duration-200',
+          'h-full border-r border-slate-200 bg-white flex flex-col justify-between p-3 shrink-0 select-none hidden md:flex transition-all duration-200 overflow-y-auto',
           collapsed ? 'w-16' : 'w-56'
         ].join(' ')}
       >
         
         <div className="space-y-4">
-          {/* Organization Switcher / Brand Header + Toggle */}
-          <div className="flex items-center justify-between px-1 py-1">
+          {/* Brand Header — Clean without toggle inside */}
+          <div className="flex items-center px-1 py-1">
             {!collapsed ? (
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 bg-slate-900 text-white rounded-md flex items-center justify-center text-[10px] font-bold">
@@ -188,14 +201,6 @@ export default function AdminPage() {
                 V
               </div>
             )}
-
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-              title={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
-            >
-              <PanelLeft size={15} />
-            </button>
           </div>
 
           {/* Quick Search Shortcut Input (if expanded) */}
@@ -214,13 +219,28 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* Navigation Links */}
+          {/* Navigation Links with Dashboard */}
           <nav className="space-y-0.5 text-[13px] font-medium">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              title={collapsed ? 'Dashboard' : undefined}
+              className={[
+                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left cursor-pointer',
+                collapsed ? 'justify-center px-0' : '',
+                activeTab === 'dashboard'
+                  ? 'bg-slate-100 text-slate-900 font-semibold'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              ].join(' ')}
+            >
+              <LayoutDashboard size={16} className={activeTab === 'dashboard' ? 'text-slate-900' : 'text-slate-400'} />
+              {!collapsed && <span>Dashboard</span>}
+            </button>
+
             <button
               onClick={() => setActiveTab('licencias')}
               title={collapsed ? 'Licencias' : undefined}
               className={[
-                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left',
+                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left cursor-pointer',
                 collapsed ? 'justify-center px-0' : '',
                 activeTab === 'licencias'
                   ? 'bg-slate-100 text-slate-900 font-semibold'
@@ -228,14 +248,14 @@ export default function AdminPage() {
               ].join(' ')}
             >
               <Key size={16} className={activeTab === 'licencias' ? 'text-slate-900' : 'text-slate-400'} />
-              {!collapsed && <span>Licencias</span>}
+              {!collapsed && <span>Licencias y Comercios</span>}
             </button>
 
             <button
               onClick={() => setActiveTab('recaudos')}
               title={collapsed ? 'Historial Recaudos' : undefined}
               className={[
-                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left',
+                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left cursor-pointer',
                 collapsed ? 'justify-center px-0' : '',
                 activeTab === 'recaudos'
                   ? 'bg-slate-100 text-slate-900 font-semibold'
@@ -250,7 +270,7 @@ export default function AdminPage() {
               onClick={() => setActiveTab('flujo')}
               title={collapsed ? 'Flujo Financiero' : undefined}
               className={[
-                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left',
+                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left cursor-pointer',
                 collapsed ? 'justify-center px-0' : '',
                 activeTab === 'flujo'
                   ? 'bg-slate-100 text-slate-900 font-semibold'
@@ -282,7 +302,7 @@ export default function AdminPage() {
           {!collapsed && (
             <button
               onClick={handleLogout}
-              className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
+              className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
               title="Cerrar Sesión"
             >
               <LogOut size={14} />
@@ -292,26 +312,33 @@ export default function AdminPage() {
 
       </aside>
 
-      {/* 2. MAIN WORKSPACE */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-white">
+      {/* 2. MAIN WORKSPACE (Independent Vertical Scroll) */}
+      <main className="flex-1 h-full flex flex-col min-w-0 overflow-y-auto bg-white">
         
-        {/* Top Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
+        {/* Top Header with External PanelLeft Toggle Button */}
+        <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4 shrink-0 bg-white sticky top-0 z-20">
           <div className="flex items-center gap-3">
+            {/* Sidebar Toggle — Placed outside the sidebar */}
             <button
-              onClick={() => setCollapsed(!collapsed)}
-              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors md:hidden"
+              onClick={toggleCollapsed}
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              title={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
             >
               <PanelLeft size={16} />
             </button>
+
             <div>
               <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                {activeTab === 'dashboard' && 'Panel de Control Maestro'}
                 {activeTab === 'licencias' && 'Licencias y Comercios'}
                 {activeTab === 'recaudos' && 'Historial de Cobros y Recaudos'}
                 {activeTab === 'flujo' && 'Flujo Financiero y Capitalización'}
               </h1>
               <p className="text-[12px] text-slate-500 mt-0.5">
-                Gestión centralizada de licencias activas, cobros en Cereté y monitoreo en tiempo real
+                {activeTab === 'dashboard' && 'Métricas ejecutivas de MRR, licencias y capitalización en tiempo real'}
+                {activeTab === 'licencias' && 'Gestión de licencias activas, planes y switch de bloqueo instantáneo'}
+                {activeTab === 'recaudos' && 'Registro detallado de pagos de cuotas y cobros físicos'}
+                {activeTab === 'flujo' && 'Proyección de flujo de caja hacia la meta de $22.000.000 COP'}
               </p>
             </div>
           </div>
@@ -338,7 +365,207 @@ export default function AdminPage() {
         </div>
 
         {/* 3. TAB CONTENT */}
-        <div className="p-6 space-y-6 max-w-7xl">
+        <div className="p-6 space-y-6 max-w-7xl flex-1">
+          
+          {/* TAB 0: DASHBOARD (Executive Master Overview) */}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-6">
+              
+              {/* 4 Executive KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                
+                {/* 1. Total Recaudado */}
+                <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs">
+                  <div className="flex items-center justify-between text-slate-400 mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider">Total Recaudado</span>
+                    <DollarSign size={15} className="text-slate-600" />
+                  </div>
+                  <p className="text-2xl font-bold font-mono text-slate-900">{formatCOP(totalRecaudadoReal)}</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Efectivo total registrado</p>
+                </div>
+
+                {/* 2. MRR */}
+                <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs">
+                  <div className="flex items-center justify-between text-slate-400 mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider">MRR Proyectado</span>
+                    <TrendingUp size={15} className="text-slate-600" />
+                  </div>
+                  <p className="text-2xl font-bold font-mono text-slate-900">{formatCOP(mrrReal)}</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Ingreso mensual recurrente</p>
+                </div>
+
+                {/* 3. Comercios Activos */}
+                <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs">
+                  <div className="flex items-center justify-between text-slate-400 mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider">Comercios Activos</span>
+                    <Users size={15} className="text-slate-600" />
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-2xl font-bold font-mono text-slate-900">{activasCount}</p>
+                    <span className="text-xs text-slate-400 font-medium">/ {clientes.length} registrados</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 font-medium mt-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>{onlineCount} en línea ahora</span>
+                  </div>
+                </div>
+
+                {/* 4. Meta de Capitalización */}
+                <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs">
+                  <div className="flex items-center justify-between text-slate-400 mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider">Meta $22M COP</span>
+                    <Sparkles size={15} className="text-amber-500" />
+                  </div>
+                  <p className="text-2xl font-bold font-mono text-slate-900">
+                    {porcentajeMeta.toFixed(1)}%
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Faltan {formatCOP(Math.max(0, META_RECAUDO - totalRecaudadoReal))}
+                  </p>
+                </div>
+
+              </div>
+
+              {/* Progress Bar Towards 22M Goal */}
+              <div className="border border-slate-200 rounded-xl p-5 bg-white space-y-2.5 shadow-xs">
+                <div className="flex justify-between items-center text-[12px]">
+                  <span className="font-semibold text-slate-800">Progreso hacia la Meta de Capitalización ($22'000.000 COP)</span>
+                  <span className="font-mono font-bold text-slate-900">{formatCOP(totalRecaudadoReal)} / {formatCOP(META_RECAUDO)}</span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-slate-900 rounded-full transition-all duration-500"
+                    style={{ width: `${porcentajeMeta}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Grid with Quick Status and Live Presence */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Live Connected Stores */}
+                <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-3 lg:col-span-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[13px] font-bold text-slate-900">Comercios en Red</h4>
+                    <span className="text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium">
+                      {clientes.length} Comercios
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                    {clientes.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-4 text-center">No hay comercios registrados</p>
+                    ) : (
+                      clientes.slice(0, 6).map(c => (
+                        <div key={c.id} className="pt-2 flex items-center justify-between text-[12px]">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={[
+                                'w-2 h-2 rounded-full shrink-0',
+                                c.online_ahora ? 'bg-emerald-500 ring-2 ring-emerald-500/20 animate-pulse' : 'bg-slate-300'
+                              ].join(' ')}
+                            />
+                            <div className="truncate">
+                              <p className="font-semibold text-slate-900 truncate">{c.nombre_comercio}</p>
+                              <p className="text-[10px] text-slate-400 truncate">{c.nombre_dueno}</p>
+                            </div>
+                          </div>
+                          <span className={[
+                            'px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shrink-0',
+                            c.plan === 'max' ? 'bg-slate-900 text-amber-300' :
+                            c.plan === 'pro' ? 'bg-slate-900 text-blue-300' :
+                            c.plan === 'starter' ? 'bg-slate-100 text-slate-700' :
+                            'bg-rose-50 text-rose-700'
+                          ].join(' ')}>
+                            {c.plan}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setActiveTab('licencias')}
+                    className="w-full text-center text-xs font-semibold text-slate-900 hover:bg-slate-50 py-2 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    Ver todas las licencias →
+                  </button>
+                </div>
+
+                {/* Monthly Projection vs Real Cash Chart */}
+                <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-3 lg:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[13px] font-bold text-slate-900">Proyección de Flujo Mensual</h4>
+                    <span className="text-[11px] text-slate-400">Cuotas Proyectadas vs Recaudado</span>
+                  </div>
+
+                  <div className="h-60 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                        <XAxis dataKey="mes" tick={{ fontSize: 11, fill: '#64748b' }} />
+                        <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickFormatter={(val) => `$${val / 1000}k`} />
+                        <Tooltip
+                          formatter={(value: any) => [formatCOP(Number(value)), '']}
+                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                        />
+                        <Bar dataKey="proyectado" name="Cuotas Proyectadas" fill="#e2e8f0" radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="recaudado" name="Recaudo Real" fill="#0f172a" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Latest Recent Payments Snippet */}
+              <div className="border border-slate-200 rounded-xl p-5 bg-white shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[13px] font-bold text-slate-900">Últimos Cobros Registrados</h4>
+                  <button
+                    onClick={() => setActiveTab('recaudos')}
+                    className="text-xs font-semibold text-slate-900 hover:underline cursor-pointer"
+                  >
+                    Ver historial completo →
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[12px]">
+                    <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 font-normal">Fecha</th>
+                        <th className="px-3 py-2 font-normal">Comercio</th>
+                        <th className="px-3 py-2 font-normal">Método</th>
+                        <th className="px-3 py-2 font-normal">Nota</th>
+                        <th className="px-3 py-2 text-right font-normal">Monto</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      {pagos.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-4 text-center text-slate-400">Sin cobros registrados aún</td>
+                        </tr>
+                      ) : (
+                        pagos.slice(0, 4).map(p => (
+                          <tr key={p.id} className="hover:bg-slate-50/60">
+                            <td className="px-3 py-2.5 font-mono text-[11px] text-slate-500">
+                              {p.registrado_en ? p.registrado_en.split('T')[0] : 'Hoy'}
+                            </td>
+                            <td className="px-3 py-2.5 font-semibold text-slate-900">{p.nombre_comercio}</td>
+                            <td className="px-3 py-2.5 capitalize text-slate-500">{p.metodo}</td>
+                            <td className="px-3 py-2.5 text-slate-400 text-[11px]">{p.notas || 'Cuota mensual'}</td>
+                            <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-900">{formatCOP(p.monto)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
           
           {/* TAB 1: LICENCIAS (Table like OpenAI API keys) */}
           {activeTab === 'licencias' && (
