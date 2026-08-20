@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../components/auth/AuthContext'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { loginSchema, registerBusinessSchema } from '../lib/schemas/authSchemas'
+import { adminService } from '../services/adminService'
 import { Store } from 'lucide-react'
 
 export default function LoginPage() {
@@ -45,6 +46,9 @@ export default function LoginPage() {
           return
         }
         await signUp(email, password, nombre, businessName, direccion)
+        try {
+          await adminService.registerNewStore(businessName, nombre, email, '', 'Cereté')
+        } catch (_) {}
       } else {
         const result = loginSchema.safeParse({ email, password })
         if (!result.success) {

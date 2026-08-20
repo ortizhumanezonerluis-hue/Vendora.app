@@ -20,6 +20,9 @@ import CostosSoportadosPage from './pages/accounting/CostosSoportadosPage'
 import ExtractosBancariosPage from './pages/accounting/ExtractosBancariosPage'
 import PagosMenoresPage from './pages/accounting/PagosMenoresPage'
 import LandingPage from './pages/LandingPage'
+import AdminLoginPage from './pages/admin/AdminLoginPage'
+import AdminPage from './pages/admin/AdminPage'
+import AdminRoute from './components/auth/AdminRoute'
 import { Toaster } from './components/ui/Toaster'
 
 export default function App() {
@@ -169,12 +172,25 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* Master Admin Panel (Restricted) */}
+          <Route path="/Block_Id/Admin/Vendora" element={<AdminLoginPage />} />
+          <Route path="/Block_Id/Admin/Vendora/login" element={<AdminLoginPage />} />
+          <Route path="/000/Block_Id/Admin/Vendora" element={<AdminLoginPage />} />
+          <Route path="/000/Block_Id/Admin/Vendora/login" element={<AdminLoginPage />} />
           <Route
-            path="/contabilidad/pagos-menores"
+            path="/Block_Id/Admin/Vendora/panel"
             element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <PagosMenoresPage />
-              </ProtectedRoute>
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/000/Block_Id/Admin/Vendora/panel"
+            element={
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
             }
           />
           
