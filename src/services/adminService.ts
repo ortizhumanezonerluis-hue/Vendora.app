@@ -132,10 +132,22 @@ export const adminService = {
     metodo: string = 'efectivo',
     notas: string = ''
   ): Promise<{ pago: PagoAdmin; cliente: VendoraCliente }> {
-    const cliente = localClientesState.find(c => c.id === clienteId)
+    let cliente = localClientesState.find(c => c.id === clienteId)
+    
+    if (!cliente) {
+      try {
+        const { data } = await supabase
+          .from('vendora_clientes')
+          .select('*')
+          .eq('id', clienteId)
+          .maybeSingle()
+        if (data) cliente = data
+      } catch (_) {}
+    }
+
     const nombreComercio = cliente?.nombre_comercio || 'Comercio'
 
-    // Next cut date (+30 days)
+    // Next cut date (+30 days from today)
     const nextCut = new Date()
     nextCut.setDate(nextCut.getDate() + 30)
     const fechaCorteStr = nextCut.toISOString().split('T')[0]
@@ -143,7 +155,7 @@ export const adminService = {
     const newCuotasPagadas = (cliente?.cuotas_pagadas || 0) + 1
     const newSaldo = Math.max(0, (cliente?.saldo_pendiente || 0) - monto)
 
-    // 1. Update client
+    // 1. Update client in DB and local state
     const updatedCliente = await this.updateCliente(clienteId, {
       cuotas_pagadas: newCuotasPagadas,
       saldo_pendiente: newSaldo,
@@ -152,7 +164,7 @@ export const adminService = {
       licencia_activa: true
     })
 
-    // 2. Insert payment log
+    // 2. Insert payment log into pagos_admin
     const newPago: PagoAdmin = {
       id: `pago-${Date.now()}`,
       cliente_id: clienteId,
@@ -160,12 +172,12 @@ export const adminService = {
       monto,
       tipo_pago: 'cuota_mensual',
       metodo,
-      notas: notas || 'Cobro registrado por administrador',
+      notas: notas || `Cuota mensual (${newCuotasPagadas}/${updatedCliente.cuotas_total || 10})`,
       registrado_en: new Date().toISOString()
     }
 
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('pagos_admin')
         .insert([{
           cliente_id: clienteId,
@@ -179,32 +191,78 @@ export const adminService = {
         .select()
         .single()
 
-      if (data) {
+      if (!error && data) {
         localPagosState.unshift(data)
         return { pago: data, cliente: updatedCliente }
       }
-    } catch (_) {}
+    } catch (err) {
+      console.warn('Error insertando en pagos_admin:', err)
+    }
 
     localPagosState.unshift(newPago)
     return { pago: newPago, cliente: updatedCliente }
   },
 
   // ==========================================
-  // 5. GET PAYMENT LOGS
+  // 5. GET PAYMENT LOGS (Syncs with clients' paid cuotas)
   // ==========================================
   async getPagos(): Promise<PagoAdmin[]> {
+    let dbPagos: PagoAdmin[] = []
     try {
       const { data, error } = await supabase
         .from('pagos_admin')
         .select('*')
         .order('registrado_en', { ascending: false })
 
-      if (!error && data && data.length > 0) {
-        localPagosState = data
-        return data
+      if (!error && data) {
+        dbPagos = data
       }
-    } catch (_) {}
-    return localPagosState
+    } catch (err) {
+      console.warn('Error obteniendo pagos_admin:', err)
+    }
+
+    // Combine with cuotas already marked on vendora_clientes so any cuota
+    // set in Licencias immediately reflects in Historial de Cobros!
+    const clientCuotasPagos: PagoAdmin[] = []
+    const clientsList = localClientesState.length > 0 ? localClientesState : (await this.getClientes())
+
+    for (const c of clientsList) {
+      const cuotasCount = Number(c.cuotas_pagadas) || 0
+      if (cuotasCount > 0) {
+        // Count how many pagos are already in dbPagos for this client
+        const existingLogsCount = dbPagos.filter(
+          p => p.cliente_id === c.id || (p.nombre_comercio && p.nombre_comercio === c.nombre_comercio)
+        ).length
+        const missingCount = cuotasCount - existingLogsCount
+
+        if (missingCount > 0) {
+          for (let i = 1; i <= missingCount; i++) {
+            const cuotaNum = existingLogsCount + i
+            const paymentDate = c.fecha_inicio 
+              ? new Date(new Date(c.fecha_inicio).getTime() + (cuotaNum - 1) * 30 * 24 * 60 * 60 * 1000).toISOString()
+              : new Date().toISOString()
+
+            clientCuotasPagos.push({
+              id: `cuota-${c.id}-${cuotaNum}`,
+              cliente_id: c.id,
+              nombre_comercio: c.nombre_comercio,
+              monto: Number(c.cuota_mensual) || 190000,
+              tipo_pago: 'cuota_mensual',
+              metodo: 'efectivo',
+              notas: `Cuota ${cuotaNum}/${c.cuotas_total || 10} registrada`,
+              registrado_en: paymentDate
+            })
+          }
+        }
+      }
+    }
+
+    const allPagos = [...dbPagos, ...clientCuotasPagos].sort(
+      (a, b) => new Date(b.registrado_en).getTime() - new Date(a.registrado_en).getTime()
+    )
+
+    localPagosState = allPagos
+    return allPagos
   },
 
   // ==========================================

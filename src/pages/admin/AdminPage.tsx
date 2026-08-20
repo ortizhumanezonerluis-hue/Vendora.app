@@ -98,6 +98,8 @@ export default function AdminPage() {
     try {
       const updated = await adminService.updateCliente(id, updates)
       setClientes(prev => prev.map(c => c.id === id ? updated : c))
+      const pgs = await adminService.getPagos()
+      setPagos(pgs)
       toast(`Comercio ${updated.nombre_comercio} actualizado`, { type: 'success' })
     } catch (err) {
       toast('Error al guardar cambios', { type: 'error' })
@@ -109,7 +111,8 @@ export default function AdminPage() {
     try {
       const res = await adminService.registrarPago(clienteId, monto, metodo, notas)
       setClientes(prev => prev.map(c => c.id === clienteId ? res.cliente : c))
-      setPagos(prev => [res.pago, ...prev])
+      const pgs = await adminService.getPagos()
+      setPagos(pgs)
       toast(`Cobro de ${formatCOP(monto)} registrado con éxito (+30 días de vigencia)`, { type: 'success' })
     } catch (err) {
       toast('Error al registrar cobro', { type: 'error' })

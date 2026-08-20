@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { VendoraCliente } from '../../services/adminService'
 import { formatCOP } from '../../lib/utils'
 import { X, CheckCircle2, Wallet } from 'lucide-react'
@@ -16,11 +16,21 @@ export default function RegistrarPagoDialog({
   onClose,
   onRegister
 }: RegistrarPagoDialogProps) {
-  const [selectedId, setSelectedId] = useState(clientes[0]?.id || '')
-  const [monto, setMonto] = useState(String(clientes[0]?.cuota_mensual || 190000))
+  const [selectedId, setSelectedId] = useState('')
+  const [monto, setMonto] = useState('190000')
   const [metodo, setMetodo] = useState('efectivo')
   const [notas, setNotas] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Synchronize selected client and amount whenever the dialog is opened or client list loads
+  useEffect(() => {
+    if (isOpen && clientes.length > 0) {
+      const currentValid = clientes.find(c => c.id === selectedId)
+      const target = currentValid || clientes[0]
+      setSelectedId(target.id)
+      setMonto(String(target.cuota_mensual || 190000))
+    }
+  }, [isOpen, clientes])
 
   if (!isOpen) return null
 
@@ -34,13 +44,15 @@ export default function RegistrarPagoDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedId) return
+    const targetId = selectedId || clientes[0]?.id
+    if (!targetId) return
     const num = parseFloat(monto) || 0
     if (num <= 0) return
 
     setLoading(true)
     try {
-      await onRegister(selectedId, num, metodo, notas)
+      await onRegister(targetId, num, metodo, notas)
+      setNotas('')
       onClose()
     } finally {
       setLoading(false)
