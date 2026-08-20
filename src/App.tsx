@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './components/auth/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
+import DashboardPage from './pages/DashboardPage'
 import POSPage from './pages/POSPage'
 import InventoryPage from './pages/InventoryPage'
 import ScannerPage from './pages/ScannerPage'
@@ -40,6 +41,14 @@ export default function App() {
           />
           
           {/* Protected Routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/pos"
             element={

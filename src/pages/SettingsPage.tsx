@@ -8,6 +8,8 @@ import { SkeletonPage } from '../components/ui/Skeleton'
 import { Store, Users, Bell, Shield, ChevronRight, Loader2, Plus, X } from 'lucide-react'
 
 import { useAuth } from '../components/auth/AuthContext'
+import { useLicense } from '../hooks/useLicense'
+import { Lock, Sparkles, MessageCircle } from 'lucide-react'
 
 interface SupabaseUser {
   id: string
@@ -26,6 +28,7 @@ const sections = [
 
 export default function SettingsPage() {
   const { profile } = useAuth()
+  const { canManageEmployees, plan } = useLicense()
   const [activeSection, setActiveSection] = useState('store')
 
   // Store info
@@ -301,19 +304,50 @@ export default function SettingsPage() {
             <div>
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <div>
-                  <p className="text-[14px] font-semibold text-gray-900">Usuarios y Roles</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[14px] font-semibold text-gray-900">Usuarios y Roles</p>
+                    {!canManageEmployees && (
+                      <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold rounded-full flex items-center gap-1">
+                        <Lock size={10} />
+                        <span>Bloqueado en STARTER</span>
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[12px] text-gray-400 mt-0.5">
                     {usersLoading ? 'Cargando...' : `${usersList.length} usuarios registrados`}
                   </p>
                 </div>
-                <button
-                  onClick={() => { setShowAddUser(true); setAddUserError(null) }}
-                  className="px-3 h-8 bg-gray-900 text-white text-[12px] font-medium rounded-md hover:bg-gray-800 transition-colors flex items-center gap-1.5"
-                >
-                  <Plus size={13} />
-                  Nuevo Usuario
-                </button>
+                {canManageEmployees ? (
+                  <button
+                    onClick={() => { setShowAddUser(true); setAddUserError(null) }}
+                    className="px-3 h-8 bg-gray-900 text-white text-[12px] font-medium rounded-md hover:bg-gray-800 transition-colors flex items-center gap-1.5"
+                  >
+                    <Plus size={13} />
+                    Nuevo Usuario
+                  </button>
+                ) : null}
               </div>
+
+              {!canManageEmployees && (
+                <div className="m-6 p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <div className="flex items-center gap-2 text-[12px] font-bold text-slate-900">
+                    <Lock size={15} className="text-amber-600" />
+                    <span>Límite de Usuario Único (Plan STARTER)</span>
+                  </div>
+                  <p className="text-[12px] text-slate-600 leading-relaxed">
+                    El Plan STARTER está diseñado para 1 solo usuario maestro (el propietario). La creación de múltiples cuentas de empleados (rol Cajero) y administradores independientes está habilitada a partir del <strong>Plan PRO</strong> en adelante.
+                  </p>
+                  <a
+                    href="https://wa.me/573009797523?text=Hola%20Oner%2C%20quiero%20subirme%20al%20Plan%20PRO%20para%20habilitar%20m%C3%BAltiples%20usuarios%20y%20roles%20en%20Vendora."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold rounded-lg transition-colors shadow-xs"
+                  >
+                    <MessageCircle size={13} />
+                    <span>Solicitar Upgrade a Plan PRO</span>
+                  </a>
+                </div>
+              )}
 
               <div className="divide-y divide-gray-50">
                 {usersLoading ? (

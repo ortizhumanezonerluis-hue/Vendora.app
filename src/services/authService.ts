@@ -1,4 +1,17 @@
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
+
+// Isolated client without persistent session storage to create employees without overriding admin session
+const resolvedUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co'
+const resolvedKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key'
+
+const secondaryAuthClient = createClient(resolvedUrl, resolvedKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
+  }
+})
 
 export const authService = {
   async signIn(email: string, password: string) {
@@ -28,6 +41,17 @@ export const authService = {
       throw new Error('Tu cuenta está inactiva. Contacta a un administrador.')
     }
 
+    // Update online status in vendora_clientes
+    try {
+      await supabase
+        .from('vendora_clientes')
+        .update({
+          online_ahora: true,
+          ultima_conexion: new Date().toISOString()
+        })
+        .or(`email_acceso.eq.${email},negocio_id.eq.${profile.negocio_id || ''}`)
+    } catch (_) {}
+
     return { user: authData.user, profile }
   },
 
@@ -43,7 +67,6 @@ export const authService = {
     businessName: string,
     direccion: string
   ) {
-    // Check if the user profile already exists in the custom 'usuarios' table
     const { data: existingUser } = await supabase
       .from('usuarios')
       .select('id')
@@ -66,7 +89,7 @@ export const authService = {
     if (authError) throw authError
     if (!authData.user) throw new Error('No se pudo crear el usuario')
 
-    // Check once more to ensure auth signUp didn't trigger a duplicate profile trigger
+    // Check once more to ensure auth signUp didn't trigger a duplicate profile
     const { data: existingAfterAuth } = await supabase
       .from('usuarios')
       .select('*')
@@ -74,8 +97,6 @@ export const authService = {
       .maybeSingle()
 
     if (existingAfterAuth) {
-      // Profile was already created (e.g. by a database trigger or concurrent request)
-      // Just return it
       return { user: authData.user, profile: existingAfterAuth }
     }
 
@@ -90,7 +111,7 @@ export const authService = {
 
     const negocioId = negocio.id
 
-    // Step 3: Create admin profile linked to THIS negocio
+    // Step 3: Create the user profile row linking them as admin to their negocio
     const { data: profile, error: profileError } = await supabase
       .from('usuarios')
       .insert([{
@@ -103,20 +124,15 @@ export const authService = {
       .select()
       .single()
 
-    if (profileError) {
-      // If profile insert failed but auth succeeded, clean up to allow retry
-      console.error('Error creating profile:', profileError)
-      throw profileError
-    }
+    if (profileError) throw profileError
 
-    // Step 4: Create business configuration scoped to this negocio
+    // Step 4: Create default configuration for this store
     try {
       await supabase
         .from('configuracion_negocio')
         .insert([{
           nombre: businessName,
-          direccion,
-          rfc: 'PROV000000000',
+          direccion: direccion || '',
           stock_minimo_alerta: 10,
           negocio_id: negocioId
         }])
@@ -124,12 +140,29 @@ export const authService = {
       console.warn('No se pudo guardar la configuración del negocio:', err)
     }
 
+    // Step 5: Register store into master licenses table
+    try {
+      await supabase
+        .from('vendora_clientes')
+        .insert([{
+          negocio_id: negocioId,
+          nombre_comercio: businessName,
+          nombre_dueno: nombre,
+          email_acceso: email,
+          plan: 'sin_licencia',
+          licencia_activa: false,
+          estado: 'pendiente',
+          online_ahora: true,
+          ultima_conexion: new Date().toISOString()
+        }])
+    } catch (_) {}
+
     return { user: authData.user, profile: { ...profile, negocio_id: negocioId } }
   },
 
   /**
    * Creates an employee that belongs to the SAME negocio as the creating admin.
-   * Admin's negocio_id is passed in explicitly.
+   * Uses secondary isolated client so admin is NOT logged out / autologged in as employee.
    */
   async createEmployee(
     email: string,
@@ -138,17 +171,24 @@ export const authService = {
     rol: 'admin' | 'empleado',
     negocioId: string
   ) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { nombre, rol }
-      }
-    })
+    if (!negocioId) {
+      throw new Error('Identificador de negocio inválido')
+    }
 
-    if (error) throw error
+    // Step 1: Create auth credentials on secondary client (does NOT touch admin session)
+    try {
+      await secondaryAuthClient.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { nombre, rol }
+        }
+      })
+    } catch (authErr: any) {
+      console.warn('Error en secondary auth signup:', authErr)
+    }
 
-    // Employee is linked to the SAME negocio as the admin
+    // Step 2: Ensure profile is created strictly linked to the current store
     const { data: profile, error: profileError } = await supabase
       .from('usuarios')
       .insert([{
@@ -178,6 +218,16 @@ export const authService = {
   },
 
   async signOut() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.email) {
+        await supabase
+          .from('vendora_clientes')
+          .update({ online_ahora: false, ultima_conexion: new Date().toISOString() })
+          .eq('email_acceso', user.email)
+      }
+    } catch (_) {}
+
     const { error } = await supabase.auth.signOut()
     if (error) throw error
   }

@@ -6,11 +6,11 @@ import { adminService, VendoraCliente, PagoAdmin } from '../../services/adminSer
 import { formatCOP } from '../../lib/utils'
 import { toast } from '../../components/ui/Toaster'
 import {
-  Key, Plus, Search, X, Edit3, Trash2, Shield, Store,
+  Key, Plus, Search, X, Edit3, Shield, Store,
   ChevronDown, Copy, RefreshCw, LogOut, ArrowUpRight,
   TrendingUp, DollarSign, Users, AlertTriangle, Check,
-  CreditCard, LayoutDashboard, SlidersHorizontal, ArrowDownRight,
-  ShieldCheck, Sparkles, Filter
+  CreditCard, LayoutDashboard, SlidersHorizontal,
+  ShieldCheck, Sparkles, Filter, PanelLeft, ArrowLeft
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
@@ -25,6 +25,9 @@ export default function AdminPage() {
   const [pagos, setPagos] = useState<PagoAdmin[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+
+  // Collapsible sidebar state
+  const [collapsed, setCollapsed] = useState(false)
 
   // Filters & Search
   const [search, setSearch] = useState('')
@@ -64,7 +67,7 @@ export default function AdminPage() {
     navigate('/Block_Id/Admin/Vendora/login', { replace: true })
   }
 
-  // --- Toggle Switch (Suspend/Activate) ---
+  // --- Toggle Switch (Instant Live Activation/Suspension) ---
   const handleToggleLicencia = async (cliente: VendoraCliente) => {
     const nextState = !cliente.licencia_activa
     try {
@@ -77,7 +80,7 @@ export default function AdminPage() {
         { type: nextState ? 'success' : 'error' }
       )
     } catch (err) {
-      toast('Error al cambiar estado', { type: 'error' })
+      toast('Error al cambiar estado de licencia', { type: 'error' })
     }
   }
 
@@ -127,7 +130,7 @@ export default function AdminPage() {
     })
   }, [clientes, search, filterActiveOnly, planFilter])
 
-  // Calculated stats (No hardcoding)
+  // Calculated stats (Dynamic & Real)
   const totalRecaudadoReal = useMemo(() => {
     return pagos.reduce((s, p) => s + (Number(p.monto) || 0), 0)
   }, [pagos])
@@ -162,96 +165,129 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 flex font-sans antialiased selection:bg-slate-900 selection:text-white">
       
-      {/* 1. OPENAI PLATFORM LEFT SIDEBAR */}
-      <aside className="w-56 border-r border-slate-200 bg-white flex flex-col justify-between p-3 shrink-0 select-none hidden md:flex">
+      {/* 1. OPENAI PLATFORM LEFT SIDEBAR (Collapsible with PanelLeft toggle) */}
+      <aside
+        className={[
+          'border-r border-slate-200 bg-white flex flex-col justify-between p-3 shrink-0 select-none hidden md:flex transition-all duration-200',
+          collapsed ? 'w-16' : 'w-56'
+        ].join(' ')}
+      >
         
         <div className="space-y-4">
-          {/* Organization Switcher */}
-          <div className="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-100/70 transition-colors cursor-pointer">
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 bg-slate-900 text-white rounded flex items-center justify-center text-[10px] font-bold">
+          {/* Organization Switcher / Brand Header + Toggle */}
+          <div className="flex items-center justify-between px-1 py-1">
+            {!collapsed ? (
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-slate-900 text-white rounded-md flex items-center justify-center text-[10px] font-bold">
+                  V
+                </div>
+                <span className="text-[13px] font-bold text-slate-900 tracking-tight">Vendora Core</span>
+              </div>
+            ) : (
+              <div className="w-6 h-6 bg-slate-900 text-white rounded-md flex items-center justify-center text-[10px] font-bold mx-auto">
                 V
               </div>
-              <span className="text-[13px] font-semibold text-slate-900 tracking-tight">Vendora Core</span>
+            )}
+
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              title={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+            >
+              <PanelLeft size={15} />
+            </button>
+          </div>
+
+          {/* Quick Search Shortcut Input (if expanded) */}
+          {!collapsed && (
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                readOnly
+                placeholder="Search"
+                className="w-full h-7 pl-7 pr-8 text-[11px] bg-slate-50 border border-slate-200 rounded-md focus:outline-none cursor-default"
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-slate-400 bg-white px-1 py-0.2 border border-slate-200 rounded">
+                Ctrl+K
+              </span>
             </div>
-            <ChevronDown size={14} className="text-slate-400" />
-          </div>
+          )}
 
-          {/* Quick Search Shortcut Input */}
-          <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              readOnly
-              placeholder="Search"
-              className="w-full h-7 pl-7 pr-8 text-[11px] bg-slate-50 border border-slate-200 rounded-md focus:outline-none cursor-default"
-            />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-mono text-slate-400 bg-white px-1 py-0.2 border border-slate-200 rounded">
-              Ctrl+K
-            </span>
-          </div>
-
-          {/* Navigation Links (OpenAI style) */}
+          {/* Navigation Links */}
           <nav className="space-y-0.5 text-[13px] font-medium">
             <button
               onClick={() => setActiveTab('licencias')}
+              title={collapsed ? 'Licencias' : undefined}
               className={[
-                'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-left',
+                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left',
+                collapsed ? 'justify-center px-0' : '',
                 activeTab === 'licencias'
                   ? 'bg-slate-100 text-slate-900 font-semibold'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               ].join(' ')}
             >
-              <Key size={15} className={activeTab === 'licencias' ? 'text-slate-900' : 'text-slate-400'} />
-              <span>Licencias</span>
+              <Key size={16} className={activeTab === 'licencias' ? 'text-slate-900' : 'text-slate-400'} />
+              {!collapsed && <span>Licencias</span>}
             </button>
 
             <button
               onClick={() => setActiveTab('recaudos')}
+              title={collapsed ? 'Historial Recaudos' : undefined}
               className={[
-                'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-left',
+                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left',
+                collapsed ? 'justify-center px-0' : '',
                 activeTab === 'recaudos'
                   ? 'bg-slate-100 text-slate-900 font-semibold'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               ].join(' ')}
             >
-              <DollarSign size={15} className={activeTab === 'recaudos' ? 'text-slate-900' : 'text-slate-400'} />
-              <span>Historial Recaudos</span>
+              <DollarSign size={16} className={activeTab === 'recaudos' ? 'text-slate-900' : 'text-slate-400'} />
+              {!collapsed && <span>Historial Recaudos</span>}
             </button>
 
             <button
               onClick={() => setActiveTab('flujo')}
+              title={collapsed ? 'Flujo Financiero' : undefined}
               className={[
-                'w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-left',
+                'w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-colors text-left',
+                collapsed ? 'justify-center px-0' : '',
                 activeTab === 'flujo'
                   ? 'bg-slate-100 text-slate-900 font-semibold'
                   : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               ].join(' ')}
             >
-              <TrendingUp size={15} className={activeTab === 'flujo' ? 'text-slate-900' : 'text-slate-400'} />
-              <span>Flujo Financiero</span>
+              <TrendingUp size={16} className={activeTab === 'flujo' ? 'text-slate-900' : 'text-slate-400'} />
+              {!collapsed && <span>Flujo Financiero</span>}
             </button>
           </nav>
         </div>
 
         {/* Bottom User Profile */}
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between px-1">
+        <div className={[
+          'pt-3 border-t border-slate-100 flex items-center justify-between',
+          collapsed ? 'justify-center px-0' : 'px-1'
+        ].join(' ')}>
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-6 h-6 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center">
+            <div className="w-7 h-7 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
               OL
             </div>
-            <div className="min-w-0">
-              <p className="text-[12px] font-semibold text-slate-900 truncate">Oner Luis Ortiz</p>
-              <p className="text-[10px] text-slate-400 truncate">Super Admin</p>
-            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-slate-900 truncate">Oner Luis Ortiz</p>
+                <p className="text-[10px] text-slate-400 truncate">Super Admin</p>
+              </div>
+            )}
           </div>
-          <button
-            onClick={handleLogout}
-            className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
-            title="Cerrar Sesión"
-          >
-            <LogOut size={14} />
-          </button>
+          {!collapsed && (
+            <button
+              onClick={handleLogout}
+              className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
+              title="Cerrar Sesión"
+            >
+              <LogOut size={14} />
+            </button>
+          )}
         </div>
 
       </aside>
@@ -261,15 +297,23 @@ export default function AdminPage() {
         
         {/* Top Header */}
         <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-              {activeTab === 'licencias' && 'Licencias y Comercios'}
-              {activeTab === 'recaudos' && 'Historial de Cobros y Recaudos'}
-              {activeTab === 'flujo' && 'Flujo Financiero y Capitalización'}
-            </h1>
-            <p className="text-[12px] text-slate-500 mt-0.5">
-              Gestión centralizada de licencias activas, cobros en Cereté y monitoreo en tiempo real
-            </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors md:hidden"
+            >
+              <PanelLeft size={16} />
+            </button>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                {activeTab === 'licencias' && 'Licencias y Comercios'}
+                {activeTab === 'recaudos' && 'Historial de Cobros y Recaudos'}
+                {activeTab === 'flujo' && 'Flujo Financiero y Capitalización'}
+              </h1>
+              <p className="text-[12px] text-slate-500 mt-0.5">
+                Gestión centralizada de licencias activas, cobros en Cereté y monitoreo en tiempo real
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -374,15 +418,15 @@ export default function AdminPage() {
                   <table className="w-full text-left border-collapse text-[12px]">
                     <thead className="bg-slate-50/70 border-b border-slate-200 text-[11px] font-semibold text-slate-500">
                       <tr>
-                        <th className="px-4 py-2.5 font-normal">Name</th>
+                        <th className="px-4 py-2.5 font-normal">Comercio</th>
                         <th className="px-4 py-2.5 font-normal">Status</th>
                         <th className="px-4 py-2.5 font-normal">Tracking ID</th>
                         <th className="px-4 py-2.5 font-normal">Plan</th>
                         <th className="px-4 py-2.5 font-normal">Contrato</th>
-                        <th className="px-4 py-2.5 font-normal">Created</th>
                         <th className="px-4 py-2.5 font-normal">Próximo Pago</th>
-                        <th className="px-4 py-2.5 font-normal">Created by</th>
-                        <th className="px-4 py-2.5 text-center font-normal w-24">Acciones</th>
+                        <th className="px-4 py-2.5 font-normal">Dueño / Contacto</th>
+                        <th className="px-4 py-2.5 text-center font-normal">Interruptor Licencia</th>
+                        <th className="px-4 py-2.5 text-center font-normal w-20">Editar</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -392,15 +436,17 @@ export default function AdminPage() {
                         return (
                           <tr key={cliente.id} className="hover:bg-slate-50/80 transition-colors group">
                             
-                            {/* Name */}
+                            {/* Comercio Name with Live Pulse Dot */}
                             <td className="px-4 py-3 font-semibold text-slate-900">
                               <div className="flex items-center gap-2">
                                 <span
                                   className={[
-                                    'w-1.5 h-1.5 rounded-full shrink-0',
-                                    isLive ? 'bg-emerald-500' : 'bg-slate-300'
+                                    'w-2 h-2 rounded-full shrink-0 transition-all',
+                                    isLive
+                                      ? 'bg-emerald-500 ring-4 ring-emerald-500/20 animate-pulse'
+                                      : 'bg-slate-300'
                                   ].join(' ')}
-                                  title={isLive ? 'En línea ahora' : 'Desconectado'}
+                                  title={isLive ? 'Comercio con sesión activa ahora' : 'Desconectado'}
                                 />
                                 <span>{cliente.nombre_comercio}</span>
                               </div>
@@ -412,7 +458,7 @@ export default function AdminPage() {
                                 className={[
                                   'text-[11px] font-medium capitalize',
                                   cliente.estado === 'activo' ? 'text-slate-900' :
-                                  cliente.estado === 'mora' ? 'text-amber-700' :
+                                  cliente.estado === 'mora' ? 'text-amber-700 font-bold' :
                                   'text-slate-400'
                                 ].join(' ')}
                               >
@@ -434,7 +480,13 @@ export default function AdminPage() {
 
                             {/* Plan */}
                             <td className="px-4 py-3">
-                              <span className="font-semibold text-[11px] text-slate-900 uppercase">
+                              <span className={[
+                                'px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider',
+                                cliente.plan === 'max' ? 'bg-slate-900 text-amber-300 border border-amber-500/30' :
+                                cliente.plan === 'pro' ? 'bg-slate-900 text-blue-300 border border-blue-500/30' :
+                                cliente.plan === 'starter' ? 'bg-slate-100 text-slate-700 border border-slate-300' :
+                                'bg-rose-50 text-rose-700 border border-rose-200'
+                              ].join(' ')}>
                                 {cliente.plan === 'sin_licencia' ? 'Sin Plan' : cliente.plan}
                               </span>
                             </td>
@@ -448,11 +500,6 @@ export default function AdminPage() {
                               )}
                             </td>
 
-                            {/* Created */}
-                            <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
-                              {cliente.fecha_inicio || '15 sept 2025'}
-                            </td>
-
                             {/* Próximo Pago */}
                             <td className="px-4 py-3 font-mono text-[11px]">
                               <span className={cliente.estado === 'mora' ? 'text-rose-600 font-bold' : 'text-slate-700'}>
@@ -460,38 +507,46 @@ export default function AdminPage() {
                               </span>
                             </td>
 
-                            {/* Created by */}
-                            <td className="px-4 py-3 text-slate-500 text-[11px] truncate max-w-[120px]">
-                              {cliente.nombre_dueno}
+                            {/* Created by / Contact */}
+                            <td className="px-4 py-3 text-slate-500 text-[11px] truncate max-w-[140px]">
+                              <div>
+                                <p className="font-medium text-slate-800">{cliente.nombre_dueno}</p>
+                                {cliente.telefono && <p className="text-[10px] text-slate-400">{cliente.telefono}</p>}
+                              </div>
                             </td>
 
-                            {/* Actions (OpenAI style Edit and Delete/Suspend) */}
+                            {/* Interactive Toggle Switch (Instant Live Activation/Suspension) */}
                             <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => {
-                                    setEditingCliente(cliente)
-                                    setDialogOpen(true)
-                                  }}
-                                  className="p-1 text-slate-400 hover:text-slate-900 rounded transition-colors"
-                                  title="Editar comercio y plan"
-                                >
-                                  <Edit3 size={13} />
-                                </button>
-
-                                <button
-                                  onClick={() => handleToggleLicencia(cliente)}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleLicencia(cliente)}
+                                className={[
+                                  'w-11 h-6 rounded-full transition-all relative cursor-pointer inline-flex items-center',
+                                  cliente.licencia_activa ? 'bg-slate-900' : 'bg-slate-200'
+                                ].join(' ')}
+                                title={cliente.licencia_activa ? 'Licencia activa (Clic para suspender)' : 'Licencia inactiva (Clic para activar)'}
+                              >
+                                <span
                                   className={[
-                                    'p-1 rounded transition-colors',
-                                    cliente.licencia_activa
-                                      ? 'text-slate-400 hover:text-rose-600'
-                                      : 'text-emerald-600 hover:text-emerald-700'
+                                    'w-4 h-4 bg-white rounded-full transition-transform shadow-xs',
+                                    cliente.licencia_activa ? 'translate-x-6' : 'translate-x-1'
                                   ].join(' ')}
-                                  title={cliente.licencia_activa ? 'Suspender licencia en tiempo real' : 'Activar licencia'}
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </div>
+                                />
+                              </button>
+                            </td>
+
+                            {/* Actions (OpenAI style Edit button) */}
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => {
+                                  setEditingCliente(cliente)
+                                  setDialogOpen(true)
+                                }}
+                                className="p-1 text-slate-400 hover:text-slate-900 rounded transition-colors"
+                                title="Editar comercio y plan"
+                              >
+                                <Edit3 size={14} />
+                              </button>
                             </td>
 
                           </tr>
@@ -532,7 +587,7 @@ export default function AdminPage() {
                       <th className="px-4 py-2.5 text-right">Monto Recaudado</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
                     {pagos.map(p => (
                       <tr key={p.id} className="hover:bg-slate-50/60 font-sans">
                         <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
@@ -552,7 +607,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* TAB 3: FLUJO FINANCIERO (Clean Charts) */}
+          {/* TAB 3: FLUJO FINANCIERO */}
           {activeTab === 'flujo' && (
             <div className="space-y-6">
               

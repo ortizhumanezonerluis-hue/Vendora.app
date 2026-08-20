@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useLicense } from '../../hooks/useLicense'
 import LockedFeatureModal from '../ui/LockedFeatureModal'
 import LicenseModal from '../ui/LicenseModal'
 import {
+  LayoutDashboard,
   ShoppingCart,
   Package,
   Scan,
@@ -23,11 +24,14 @@ import {
   FolderCheck,
   Landmark,
   Coins,
-  Lock
+  Lock,
+  PanelLeft,
+  Sparkles
 } from 'lucide-react'
 
 // Main App Navigation Items
 const mainNav = [
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false, requiredPlan: 'starter' },
   { to: '/pos', icon: ShoppingCart, label: 'Punto de Venta', adminOnly: false, requiredPlan: 'starter' },
   { to: '/inventario', icon: Package, label: 'Inventario', adminOnly: false, requiredPlan: 'starter' },
   { to: '/escaneo', icon: Scan, label: 'Escáner', adminOnly: false, requiredPlan: 'starter' },
@@ -55,6 +59,17 @@ export default function Sidebar() {
   const { profile } = useAuth()
   const { plan, canAccessPurchasing, canAccessLogs, canAccessAccounting, isSinLicencia } = useLicense()
   const isAdmin = profile?.rol === 'admin'
+
+  // Collapsed Sidebar State
+  const [collapsed, setCollapsed] = useState(() => {
+    return localStorage.getItem('vendora_sidebar_collapsed') === 'true'
+  })
+
+  const toggleCollapsed = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem('vendora_sidebar_collapsed', String(next))
+  }
 
   const isAccountingMode = location.pathname.startsWith('/contabilidad')
   const visibleMainNav = mainNav.filter((item) => !item.adminOnly || isAdmin)
@@ -98,41 +113,80 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="flex flex-col w-56 min-h-screen border-r border-gray-200 bg-white shrink-0 transition-all duration-300 select-none">
+      <aside
+        className={[
+          'flex flex-col min-h-screen border-r border-slate-200 bg-white shrink-0 transition-all duration-200 select-none z-30',
+          collapsed ? 'w-16' : 'w-56'
+        ].join(' ')}
+      >
         
-        {/* Top Header */}
-        <div className="flex items-center justify-between px-3 h-14 border-b border-gray-200 shrink-0">
+        {/* Top Header with Collapse Toggle Button */}
+        <div className="flex items-center justify-between px-3 h-14 border-b border-slate-200 shrink-0">
           {isAccountingMode ? (
             <>
+              {!collapsed ? (
+                <button
+                  onClick={() => navigate('/pos')}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100 transition-colors truncate"
+                  title="Regresar a la aplicación principal"
+                >
+                  <ArrowLeft size={14} className="text-slate-500 shrink-0" />
+                  <span className="truncate">Volver a App</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => navigate('/pos')}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 mx-auto"
+                  title="Volver a la App"
+                >
+                  <ArrowLeft size={16} />
+                </button>
+              )}
+
               <button
-                onClick={() => navigate('/pos')}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-gray-700 hover:text-gray-950 hover:bg-gray-100 transition-colors"
-                title="Regresar a la aplicación principal"
+                onClick={toggleCollapsed}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                title={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
               >
-                <ArrowLeft size={14} className="text-gray-500" />
-                <span>Volver a la App</span>
+                <PanelLeft size={16} />
               </button>
-              <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center text-gray-800">
-                <Scale size={14} />
-              </div>
             </>
           ) : (
-            <div className="flex items-center justify-between w-full px-1">
-              <div className="flex items-center gap-2.5">
-                <div className="w-6 h-6 bg-gray-900 rounded flex items-center justify-center">
-                  <Store size={13} className="text-white" />
+            <div className="flex items-center justify-between w-full">
+              {!collapsed ? (
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-6 h-6 bg-slate-900 rounded-md flex items-center justify-center shrink-0">
+                    <Store size={13} className="text-white" />
+                  </div>
+                  <span className="font-bold text-[13px] tracking-tight text-slate-900 leading-none truncate">
+                    Vendora
+                  </span>
+                  
+                  {/* Ultra Premium Plan Badge */}
+                  <span className={[
+                    'px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0',
+                    plan === 'max' ? 'bg-slate-900 text-amber-300 border border-amber-500/30' :
+                    plan === 'pro' ? 'bg-slate-900 text-blue-300 border border-blue-500/30' :
+                    plan === 'starter' ? 'bg-slate-100 text-slate-700 border border-slate-300' :
+                    'bg-rose-50 text-rose-700 border border-rose-200'
+                  ].join(' ')}>
+                    {plan === 'sin_licencia' ? 'Sin Licencia' : plan.toUpperCase()}
+                  </span>
                 </div>
-                <span className="font-semibold text-[13px] tracking-tight text-gray-900 leading-none">Vendora</span>
-              </div>
-              <span className={[
-                'px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider',
-                plan === 'max' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
-                plan === 'pro' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
-                plan === 'starter' ? 'bg-slate-100 text-slate-700 border border-slate-200' :
-                'bg-rose-100 text-rose-800'
-              ].join(' ')}>
-                {plan === 'sin_licencia' ? 'Sin Licencia' : plan.toUpperCase()}
-              </span>
+              ) : (
+                <div className="w-7 h-7 bg-slate-900 rounded-md flex items-center justify-center mx-auto shrink-0">
+                  <Store size={14} className="text-white" />
+                </div>
+              )}
+
+              {/* Sidebar Collapse Toggle Button (Exact icon from user reference image) */}
+              <button
+                onClick={toggleCollapsed}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
+                title={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+              >
+                <PanelLeft size={16} />
+              </button>
             </div>
           )}
         </div>
@@ -140,31 +194,33 @@ export default function Sidebar() {
         {/* Navigation Links */}
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
           {isAccountingMode ? (
-            <div className="space-y-0.5 animate-in fade-in duration-150">
+            <div className="space-y-0.5">
               {accountingNav.map(({ to, icon: Icon, label }) => {
                 const active = location.pathname === to
                 return (
                   <NavLink
                     key={to}
                     to={to}
+                    title={collapsed ? label : undefined}
                     className={[
                       'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
+                      collapsed ? 'justify-center px-0' : '',
                       active
-                        ? 'bg-gray-100 text-gray-900 font-semibold'
-                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+                        ? 'bg-slate-100 text-slate-900 font-semibold'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
                     ].join(' ')}
                   >
-                    <Icon size={15} className={active ? 'text-gray-900' : 'text-gray-400'} />
-                    <span>{label}</span>
+                    <Icon size={16} className={active ? 'text-slate-900' : 'text-slate-400'} />
+                    {!collapsed && <span className="truncate">{label}</span>}
                   </NavLink>
                 )
               })}
             </div>
           ) : (
-            <div className="space-y-0.5 animate-in fade-in duration-150">
+            <div className="space-y-0.5">
               {visibleMainNav.map((item) => {
                 const { to, icon: Icon, label, requiredPlan } = item
-                const active = location.pathname.startsWith(to) || (label === 'Contabilidad' && location.pathname.startsWith('/contabilidad'))
+                const active = location.pathname === to || (label === 'Contabilidad' && location.pathname.startsWith('/contabilidad'))
                 
                 const isLocked =
                   (requiredPlan === 'pro' && !canAccessPurchasing) ||
@@ -174,22 +230,24 @@ export default function Sidebar() {
                   <NavLink
                     key={to}
                     to={to}
+                    title={collapsed ? `${label} ${isLocked ? '(Bloqueado)' : ''}` : undefined}
                     onClick={(e) => isLocked && handleLockedClick(e, item)}
                     className={[
-                      'flex items-center justify-between px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
+                      'flex items-center justify-between px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors group',
+                      collapsed ? 'justify-center px-0' : '',
                       active
-                        ? 'bg-gray-100 text-gray-900 font-semibold'
+                        ? 'bg-slate-100 text-slate-900 font-semibold'
                         : isLocked
-                        ? 'text-gray-400 hover:bg-gray-50/80 hover:text-gray-600 cursor-pointer'
-                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+                        ? 'text-slate-400 hover:bg-slate-50/80 hover:text-slate-600 cursor-pointer'
+                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
                     ].join(' ')}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <Icon size={15} className={active ? 'text-gray-900' : 'text-gray-400'} />
-                      <span className="truncate">{label}</span>
+                      <Icon size={16} className={active ? 'text-slate-900' : isLocked ? 'text-slate-400' : 'text-slate-400'} />
+                      {!collapsed && <span className="truncate">{label}</span>}
                     </div>
 
-                    {isLocked && (
+                    {!collapsed && isLocked && (
                       <span className="p-0.5 text-amber-500 hover:text-amber-600 shrink-0" title={`Bloqueado para ${plan.toUpperCase()}`}>
                         <Lock size={12} />
                       </span>
@@ -202,37 +260,44 @@ export default function Sidebar() {
         </nav>
 
         {/* Settings and User profile at bottom */}
-        <div className="px-2 py-3 border-t border-gray-200">
+        <div className="px-2 py-3 border-t border-slate-200">
           {isAdmin && (
             <NavLink
               to="/configuracion"
+              title={collapsed ? 'Configuración' : undefined}
               className={({ isActive }) =>
                 [
                   'flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-colors',
+                  collapsed ? 'justify-center px-0' : '',
                   isActive
-                    ? 'bg-gray-100 text-gray-900 font-semibold'
-                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+                    ? 'bg-slate-100 text-slate-900 font-semibold'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
                 ].join(' ')
               }
             >
               {({ isActive }) => (
                 <>
-                  <Settings size={15} className={isActive ? 'text-gray-900' : 'text-gray-400'} />
-                  Configuración
+                  <Settings size={16} className={isActive ? 'text-slate-900' : 'text-slate-400'} />
+                  {!collapsed && <span>Configuración</span>}
                 </>
               )}
             </NavLink>
           )}
 
           {/* User info */}
-          <div className="mt-3 flex items-center gap-2.5 px-2.5 py-2 bg-gray-50 rounded-lg">
-            <div className="w-7 h-7 rounded-full bg-gray-900 flex items-center justify-center text-[10px] font-semibold text-white">
+          <div className={[
+            'mt-2.5 flex items-center gap-2.5 bg-slate-50 rounded-lg p-2',
+            collapsed ? 'justify-center p-1.5' : ''
+          ].join(' ')}>
+            <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-[10px] font-semibold text-white shrink-0">
               {initials}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12px] font-medium text-gray-900 truncate">{profile?.nombre || 'Usuario'}</p>
-              <p className="text-[10px] text-gray-400 truncate capitalize">{profile?.rol === 'admin' ? 'Administrador' : 'Empleado'}</p>
-            </div>
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-semibold text-slate-900 truncate">{profile?.nombre || 'Usuario'}</p>
+                <p className="text-[10px] text-slate-400 truncate capitalize">{profile?.rol === 'admin' ? 'Administrador' : 'Empleado'}</p>
+              </div>
+            )}
           </div>
         </div>
       </aside>

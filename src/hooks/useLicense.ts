@@ -21,33 +21,34 @@ export interface LicensePermissions {
 
 export function useLicense(): LicensePermissions {
   const { profile, user } = useAuth()
-  const [plan, setPlan] = useState<PlanType>('pro')
-  const [licenciaActiva, setLicenciaActiva] = useState(true)
-  const [cliente, setCliente] = useState<VendoraCliente | null>(null)
-  const [loading, setLoading] = useState(true)
-
   const email = profile?.email || user?.email
+
+  // Read instant cache to completely avoid "PRO" or incorrect plan flickering during navigation
+  const cachedPlan = (localStorage.getItem('vendora_cached_plan') as PlanType) || 'pro'
+  const cachedActive = localStorage.getItem('vendora_cached_licencia') !== 'false'
+
+  const [plan, setPlan] = useState<PlanType>(cachedPlan)
+  const [licenciaActiva, setLicenciaActiva] = useState(cachedActive)
+  const [cliente, setCliente] = useState<VendoraCliente | null>(null)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     let isMounted = true
 
     async function loadLicense() {
-      if (!email && !profile?.negocio_id) {
-        setLoading(false)
-        return
-      }
+      if (!email && !profile?.negocio_id) return
 
       try {
         const res = await adminService.getLicenseForBusiness(email, profile?.negocio_id || undefined)
-        if (isMounted) {
+        if (isMounted && res) {
           setPlan(res.plan)
           setLicenciaActiva(res.licenciaActiva)
           setCliente(res.cliente)
+          localStorage.setItem('vendora_cached_plan', res.plan)
+          localStorage.setItem('vendora_cached_licencia', String(res.licenciaActiva))
         }
       } catch (err) {
         console.warn('Error cargando licencia:', err)
-      } finally {
-        if (isMounted) setLoading(false)
       }
     }
 
@@ -61,10 +62,13 @@ export function useLicense(): LicensePermissions {
         { event: '*', schema: 'public', table: 'vendora_clientes' },
         (payload: any) => {
           const updated = payload.new as VendoraCliente
-          if (updated && (updated.email_acceso === email || updated.negocio_id === profile?.negocio_id)) {
+          if (updated && (updated.email_acceso === email || (profile?.negocio_id && updated.negocio_id === profile.negocio_id))) {
+            const active = Boolean(updated.licencia_activa && updated.estado === 'activo')
             setPlan(updated.plan)
-            setLicenciaActiva(Boolean(updated.licencia_activa && updated.estado === 'activo'))
+            setLicenciaActiva(active)
             setCliente(updated)
+            localStorage.setItem('vendora_cached_plan', updated.plan)
+            localStorage.setItem('vendora_cached_licencia', String(active))
           }
         }
       )

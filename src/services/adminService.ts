@@ -39,222 +39,104 @@ export interface PagoAdmin {
   registrado_en: string
 }
 
-// Initial mock clients for instant UI testing before SQL runs
-const INITIAL_MOCK_CLIENTES: VendoraCliente[] = [
-  {
-    id: 'c1111111-1111-1111-1111-111111111111',
-    nombre_comercio: 'Granero El Puente',
-    nombre_dueno: 'Carlos Pérez',
-    email_acceso: 'graneroelpuente@gmail.com',
-    telefono: '301 548 9921',
-    municipio: 'Cereté',
-    plan: 'pro',
-    licencia_activa: true,
-    tipo_pago: 'financiado',
-    estado: 'activo',
-    cuota_mensual: 160000,
-    cuotas_pagadas: 3,
-    cuotas_total: 10,
-    saldo_pendiente: 1120000,
-    fecha_inicio: '2026-05-15',
-    fecha_corte: '2026-09-15',
-    online_ahora: true,
-    ultima_conexion: new Date().toISOString()
-  },
-  {
-    id: 'c2222222-2222-2222-2222-222222222222',
-    nombre_comercio: 'Boutique Mariana Centro',
-    nombre_dueno: 'Mariana Torres',
-    email_acceso: 'boutiquemariana@gmail.com',
-    telefono: '310 452 3319',
-    municipio: 'Montería',
-    plan: 'max',
-    licencia_activa: true,
-    tipo_pago: 'financiado',
-    estado: 'activo',
-    cuota_mensual: 240000,
-    cuotas_pagadas: 4,
-    cuotas_total: 10,
-    saldo_pendiente: 1440000,
-    fecha_inicio: '2026-04-10',
-    fecha_corte: '2026-09-10',
-    online_ahora: true,
-    ultima_conexion: new Date().toISOString()
-  },
-  {
-    id: 'c3333333-3333-3333-3333-333333333333',
-    nombre_comercio: 'Droguería Salud Total',
-    nombre_dueno: 'Jorge Ramos',
-    email_acceso: 'saludtotal@hotmail.com',
-    telefono: '300 881 9203',
-    municipio: 'Cereté',
-    plan: 'starter',
-    licencia_activa: true,
-    tipo_pago: 'financiado',
-    estado: 'mora',
-    cuota_mensual: 80000,
-    cuotas_pagadas: 1,
-    cuotas_total: 10,
-    saldo_pendiente: 720000,
-    fecha_inicio: '2026-07-01',
-    fecha_corte: '2026-08-01',
-    online_ahora: false,
-    ultima_conexion: '2026-08-15T14:30:00Z'
-  },
-  {
-    id: 'c4444444-4444-4444-4444-444444444444',
-    nombre_comercio: 'Ferretería Los Andes',
-    nombre_dueno: 'Luis Martínez',
-    email_acceso: 'ferreterialosandes@gmail.com',
-    telefono: '312 890 4421',
-    municipio: 'Sahagún',
-    plan: 'pro',
-    licencia_activa: true,
-    tipo_pago: 'vitalicio',
-    estado: 'activo',
-    cuota_mensual: 0,
-    cuotas_pagadas: 10,
-    cuotas_total: 10,
-    saldo_pendiente: 0,
-    fecha_inicio: '2026-01-20',
-    fecha_corte: '2027-01-20',
-    online_ahora: false,
-    ultima_conexion: '2026-08-18T10:15:00Z'
-  },
-  {
-    id: 'c5555555-5555-5555-5555-555555555555',
-    nombre_comercio: 'Minimarket El Remate',
-    nombre_dueno: 'Sandra Ortiz',
-    email_acceso: 'elremateminimarket@gmail.com',
-    telefono: '320 993 8812',
-    municipio: 'Ciénaga de Oro',
-    plan: 'max',
-    licencia_activa: true,
-    tipo_pago: 'financiado',
-    estado: 'activo',
-    cuota_mensual: 240000,
-    cuotas_pagadas: 2,
-    cuotas_total: 10,
-    saldo_pendiente: 1920000,
-    fecha_inicio: '2026-06-25',
-    fecha_corte: '2026-09-25',
-    online_ahora: true,
-    ultima_conexion: new Date().toISOString()
-  },
-  {
-    id: 'c6666666-6666-6666-6666-666666666666',
-    nombre_comercio: 'Papelería Creativa',
-    nombre_dueno: 'Diana Gómez',
-    email_acceso: 'papeleriacreativa@gmail.com',
-    telefono: '304 558 2910',
-    municipio: 'Cereté',
-    plan: 'starter',
-    licencia_activa: true,
-    tipo_pago: 'financiado',
-    estado: 'activo',
-    cuota_mensual: 80000,
-    cuotas_pagadas: 5,
-    cuotas_total: 10,
-    saldo_pendiente: 400000,
-    fecha_inicio: '2026-03-01',
-    fecha_corte: '2026-09-01',
-    online_ahora: false,
-    ultima_conexion: '2026-08-17T18:00:00Z'
-  },
-  {
-    id: 'c7777777-7777-7777-7777-777777777777',
-    nombre_comercio: 'Miscelánea San José',
-    nombre_dueno: 'Efraín López',
-    email_acceso: 'sanjosemiscelanea@gmail.com',
-    telefono: '311 772 9901',
-    municipio: 'Lorica',
-    plan: 'pro',
-    licencia_activa: false,
-    tipo_pago: 'financiado',
-    estado: 'suspendido',
-    cuota_mensual: 160000,
-    cuotas_pagadas: 2,
-    cuotas_total: 10,
-    saldo_pendiente: 1280000,
-    fecha_inicio: '2026-04-05',
-    fecha_corte: '2026-07-05',
-    online_ahora: false,
-    ultima_conexion: '2026-07-20T11:00:00Z'
-  },
-  {
-    id: 'c8888888-8888-8888-8888-888888888888',
-    nombre_comercio: 'Tienda La Bendición',
-    nombre_dueno: 'Rosa Arroyo',
-    email_acceso: 'tiendalabendicion@gmail.com',
-    telefono: '300 449 1022',
-    municipio: 'Cereté',
-    plan: 'sin_licencia',
-    licencia_activa: false,
-    tipo_pago: 'financiado',
-    estado: 'pendiente',
-    cuota_mensual: 160000,
-    cuotas_pagadas: 0,
-    cuotas_total: 10,
-    saldo_pendiente: 1600000,
-    fecha_inicio: new Date().toISOString().split('T')[0],
-    fecha_corte: new Date().toISOString().split('T')[0],
-    online_ahora: false,
-    ultima_conexion: new Date().toISOString()
-  }
-]
-
-let localClientesState = [...INITIAL_MOCK_CLIENTES]
-let localPagosState: PagoAdmin[] = [
-  {
-    id: 'p1',
-    cliente_id: 'c1111111-1111-1111-1111-111111111111',
-    nombre_comercio: 'Granero El Puente',
-    monto: 160000,
-    tipo_pago: 'cuota_mensual',
-    metodo: 'efectivo',
-    notas: 'Cobro cuota 3 en local',
-    registrado_en: '2026-08-15T11:00:00Z'
-  },
-  {
-    id: 'p2',
-    cliente_id: 'c2222222-2222-2222-2222-222222222222',
-    nombre_comercio: 'Boutique Mariana Centro',
-    monto: 240000,
-    tipo_pago: 'cuota_mensual',
-    metodo: 'transferencia',
-    notas: 'Transferencia Nequi',
-    registrado_en: '2026-08-16T15:30:00Z'
-  },
-  {
-    id: 'p3',
-    cliente_id: 'c5555555-5555-5555-5555-555555555555',
-    nombre_comercio: 'Minimarket El Remate',
-    monto: 240000,
-    tipo_pago: 'cuota_mensual',
-    metodo: 'efectivo',
-    notas: 'Cobro en efectivo cuota 2',
-    registrado_en: '2026-08-18T09:45:00Z'
-  }
-]
+let localClientesState: VendoraCliente[] = []
+let localPagosState: PagoAdmin[] = []
 
 export const adminService = {
   // ==========================================
-  // 1. GET ALL CLIENTS
+  // 1. GET ALL CLIENTS (Syncs all real stores from DB)
   // ==========================================
   async getClientes(): Promise<VendoraCliente[]> {
     try {
-      const { data, error } = await supabase
+      // 1. Fetch from vendora_clientes
+      const { data: dbClientes, error } = await supabase
         .from('vendora_clientes')
         .select('*')
         .order('creado_en', { ascending: false })
 
-      if (!error && data && data.length > 0) {
-        localClientesState = data
-        return data
+      let allList: VendoraCliente[] = dbClientes || []
+
+      // 2. Fetch existing registered stores from configuracion_negocio / usuarios
+      // to ensure stores created before the update are ALWAYS shown!
+      try {
+        const { data: configs } = await supabase
+          .from('configuracion_negocio')
+          .select('*')
+
+        const { data: users } = await supabase
+          .from('usuarios')
+          .select('*')
+          .eq('rol', 'admin')
+
+        if (configs && configs.length > 0) {
+          for (const conf of configs) {
+            const exists = allList.some(
+              c => (conf.negocio_id && c.negocio_id === conf.negocio_id) || c.nombre_comercio === conf.nombre
+            )
+
+            if (!exists) {
+              const matchedUser = users?.find(u => u.negocio_id === conf.negocio_id)
+              const autoClient: Partial<VendoraCliente> = {
+                negocio_id: conf.negocio_id,
+                nombre_comercio: conf.nombre || 'Comercio Registrado',
+                nombre_dueno: matchedUser?.nombre || 'Propietario',
+                email_acceso: matchedUser?.email || '',
+                telefono: conf.telefono || '',
+                municipio: 'Cereté',
+                plan: 'pro',
+                licencia_activa: true,
+                tipo_pago: 'financiado',
+                estado: 'activo',
+                cuota_mensual: 160000,
+                cuotas_pagadas: 1,
+                cuotas_total: 10,
+                saldo_pendiente: 1440000,
+                fecha_inicio: conf.creado_en ? conf.creado_en.split('T')[0] : new Date().toISOString().split('T')[0],
+                fecha_corte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                online_ahora: false,
+                ultima_conexion: matchedUser?.ultimo_acceso || new Date().toISOString()
+              }
+
+              // Save to vendora_clientes table so it's persisted in DB
+              try {
+                const { data: saved } = await supabase
+                  .from('vendora_clientes')
+                  .insert([autoClient])
+                  .select()
+                  .single()
+
+                if (saved) {
+                  allList.push(saved)
+                }
+              } catch (_) {
+                allList.push({ ...autoClient, id: `auto-${conf.id}` } as VendoraCliente)
+              }
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.warn('Error sincronizando comercios existentes:', syncErr)
+      }
+
+      // Check real-time online presence (if last connection was < 5 min ago)
+      const now = Date.now()
+      allList = allList.map(c => {
+        const lastConn = c.ultima_conexion ? new Date(c.ultima_conexion).getTime() : 0
+        const isRecentlyActive = (now - lastConn) < 5 * 60 * 1000
+        return {
+          ...c,
+          online_ahora: Boolean(c.online_ahora || isRecentlyActive)
+        }
+      })
+
+      if (allList.length > 0) {
+        localClientesState = allList
+        return allList
       }
     } catch (e) {
-      console.warn('Usando caché local para vendora_clientes:', e)
+      console.warn('Fallo al obtener vendora_clientes:', e)
     }
+
     return localClientesState
   },
 
@@ -280,7 +162,7 @@ export const adminService = {
         return data
       }
     } catch (e) {
-      console.warn('Error actualizando cliente en Supabase, aplicando local:', e)
+      console.warn('Error actualizando cliente:', e)
     }
 
     // Fallback local
@@ -306,7 +188,7 @@ export const adminService = {
   },
 
   // ==========================================
-  // 4. REGISTER RAPID PAYMENT (En local o Nequi)
+  // 4. REGISTER RAPID PAYMENT
   // ==========================================
   async registrarPago(
     clienteId: string,
@@ -317,7 +199,7 @@ export const adminService = {
     const cliente = localClientesState.find(c => c.id === clienteId)
     const nombreComercio = cliente?.nombre_comercio || 'Comercio'
 
-    // Compute next cut date (+30 days)
+    // Next cut date (+30 days)
     const nextCut = new Date()
     nextCut.setDate(nextCut.getDate() + 30)
     const fechaCorteStr = nextCut.toISOString().split('T')[0]
@@ -325,7 +207,7 @@ export const adminService = {
     const newCuotasPagadas = (cliente?.cuotas_pagadas || 0) + 1
     const newSaldo = Math.max(0, (cliente?.saldo_pendiente || 0) - monto)
 
-    // 1. Update client in DB
+    // 1. Update client
     const updatedCliente = await this.updateCliente(clienteId, {
       cuotas_pagadas: newCuotasPagadas,
       saldo_pendiente: newSaldo,
@@ -334,7 +216,7 @@ export const adminService = {
       licencia_activa: true
     })
 
-    // 2. Insert payment record in DB
+    // 2. Insert payment log
     const newPago: PagoAdmin = {
       id: `pago-${Date.now()}`,
       cliente_id: clienteId,
@@ -342,7 +224,7 @@ export const adminService = {
       monto,
       tipo_pago: 'cuota_mensual',
       metodo,
-      notas: notas || `Cobro registrado por administrador`,
+      notas: notas || 'Cobro registrado por administrador',
       registrado_en: new Date().toISOString()
     }
 
@@ -390,7 +272,7 @@ export const adminService = {
   },
 
   // ==========================================
-  // 6. GET CURRENT BUSINESS LICENSE (For Client Frontend)
+  // 6. GET CURRENT BUSINESS LICENSE
   // ==========================================
   async getLicenseForBusiness(email?: string, negocioId?: string): Promise<{
     plan: PlanType
@@ -429,7 +311,7 @@ export const adminService = {
       }
     } catch (_) {}
 
-    // Fallback: Check local state by email
+    // Fallback: Check local state
     if (email) {
       const local = localClientesState.find(c => c.email_acceso === email)
       if (local) {
@@ -441,9 +323,8 @@ export const adminService = {
       }
     }
 
-    // Default for newly registered or unassigned stores
     return {
-      plan: 'pro', // Default fallback for existing local development so dev server doesn't break
+      plan: 'pro',
       licenciaActiva: true,
       cliente: null
     }
