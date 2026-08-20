@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useLicense } from '../../hooks/useLicense'
 import LockedFeatureModal from '../ui/LockedFeatureModal'
 import LicenseModal from '../ui/LicenseModal'
 import {
-  LayoutDashboard,
   ShoppingCart,
   Package,
   Scan,
@@ -24,14 +23,11 @@ import {
   FolderCheck,
   Landmark,
   Coins,
-  Lock,
-  PanelLeft,
-  Sparkles
+  Lock
 } from 'lucide-react'
 
-// Main App Navigation Items
+// Main App Navigation Items (NO Dashboard — that belongs only in the Admin panel)
 const mainNav = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: false, requiredPlan: 'starter' },
   { to: '/pos', icon: ShoppingCart, label: 'Punto de Venta', adminOnly: false, requiredPlan: 'starter' },
   { to: '/inventario', icon: Package, label: 'Inventario', adminOnly: false, requiredPlan: 'starter' },
   { to: '/escaneo', icon: Scan, label: 'Escáner', adminOnly: false, requiredPlan: 'starter' },
@@ -53,23 +49,16 @@ const accountingNav = [
   { to: '/contabilidad/pagos-menores', icon: Coins, label: 'Pagos Menores' },
 ]
 
-export default function Sidebar() {
+type SidebarProps = {
+  collapsed: boolean
+}
+
+export default function Sidebar({ collapsed }: SidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { profile } = useAuth()
   const { plan, canAccessPurchasing, canAccessLogs, canAccessAccounting, isSinLicencia } = useLicense()
   const isAdmin = profile?.rol === 'admin'
-
-  // Collapsed Sidebar State
-  const [collapsed, setCollapsed] = useState(() => {
-    return localStorage.getItem('vendora_sidebar_collapsed') === 'true'
-  })
-
-  const toggleCollapsed = () => {
-    const next = !collapsed
-    setCollapsed(next)
-    localStorage.setItem('vendora_sidebar_collapsed', String(next))
-  }
 
   const isAccountingMode = location.pathname.startsWith('/contabilidad')
   const visibleMainNav = mainNav.filter((item) => !item.adminOnly || isAdmin)
@@ -120,74 +109,52 @@ export default function Sidebar() {
         ].join(' ')}
       >
         
-        {/* Top Header with Collapse Toggle Button */}
-        <div className="flex items-center justify-between px-3 h-14 border-b border-slate-200 shrink-0">
+        {/* Top Header — brand logo only, toggle button is in the Topbar */}
+        <div className="flex items-center px-3 h-14 border-b border-slate-200 shrink-0">
           {isAccountingMode ? (
-            <>
-              {!collapsed ? (
-                <button
-                  onClick={() => navigate('/pos')}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100 transition-colors truncate"
-                  title="Regresar a la aplicación principal"
-                >
-                  <ArrowLeft size={14} className="text-slate-500 shrink-0" />
-                  <span className="truncate">Volver a App</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => navigate('/pos')}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 mx-auto"
-                  title="Volver a la App"
-                >
-                  <ArrowLeft size={16} />
-                </button>
-              )}
-
+            !collapsed ? (
               <button
-                onClick={toggleCollapsed}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                title={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+                onClick={() => navigate('/pos')}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100 transition-colors truncate w-full"
+                title="Regresar a la aplicación principal"
               >
-                <PanelLeft size={16} />
+                <ArrowLeft size={14} className="text-slate-500 shrink-0" />
+                <span className="truncate">Volver a App</span>
               </button>
-            </>
+            ) : (
+              <button
+                onClick={() => navigate('/pos')}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 mx-auto"
+                title="Volver a la App"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )
           ) : (
-            <div className="flex items-center justify-between w-full">
-              {!collapsed ? (
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-6 h-6 bg-slate-900 rounded-md flex items-center justify-center shrink-0">
-                    <Store size={13} className="text-white" />
-                  </div>
-                  <span className="font-bold text-[13px] tracking-tight text-slate-900 leading-none truncate">
-                    Vendora
-                  </span>
-                  
-                  {/* Ultra Premium Plan Badge */}
-                  <span className={[
-                    'px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0',
-                    plan === 'max' ? 'bg-slate-900 text-amber-300 border border-amber-500/30' :
-                    plan === 'pro' ? 'bg-slate-900 text-blue-300 border border-blue-500/30' :
-                    plan === 'starter' ? 'bg-slate-100 text-slate-700 border border-slate-300' :
-                    'bg-rose-50 text-rose-700 border border-rose-200'
-                  ].join(' ')}>
-                    {plan === 'sin_licencia' ? 'Sin Licencia' : plan.toUpperCase()}
-                  </span>
+            !collapsed ? (
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-6 h-6 bg-slate-900 rounded-md flex items-center justify-center shrink-0">
+                  <Store size={13} className="text-white" />
                 </div>
-              ) : (
-                <div className="w-7 h-7 bg-slate-900 rounded-md flex items-center justify-center mx-auto shrink-0">
-                  <Store size={14} className="text-white" />
-                </div>
-              )}
-
-              {/* Sidebar Collapse Toggle Button (Exact icon from user reference image) */}
-              <button
-                onClick={toggleCollapsed}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer shrink-0"
-                title={collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
-              >
-                <PanelLeft size={16} />
-              </button>
-            </div>
+                <span className="font-bold text-[13px] tracking-tight text-slate-900 leading-none truncate">
+                  Vendora
+                </span>
+                {/* Ultra Premium Plan Badge */}
+                <span className={[
+                  'px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider shrink-0',
+                  plan === 'max' ? 'bg-slate-900 text-amber-300 border border-amber-500/30' :
+                  plan === 'pro' ? 'bg-slate-900 text-blue-300 border border-blue-500/30' :
+                  plan === 'starter' ? 'bg-slate-100 text-slate-700 border border-slate-300' :
+                  'bg-rose-50 text-rose-700 border border-rose-200'
+                ].join(' ')}>
+                  {plan === 'sin_licencia' ? 'Sin Licencia' : plan.toUpperCase()}
+                </span>
+              </div>
+            ) : (
+              <div className="w-7 h-7 bg-slate-900 rounded-md flex items-center justify-center mx-auto shrink-0">
+                <Store size={14} className="text-white" />
+              </div>
+            )
           )}
         </div>
 

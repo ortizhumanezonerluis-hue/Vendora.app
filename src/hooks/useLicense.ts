@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../components/auth/AuthContext'
 import { adminService, PlanType, VendoraCliente } from '../services/adminService'
 import { supabase } from '../lib/supabaseClient'
@@ -32,6 +32,9 @@ export function useLicense(): LicensePermissions {
   const [cliente, setCliente] = useState<VendoraCliente | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // Unique channel name per instance to avoid Supabase "cannot add callbacks after subscribe()" error
+  const channelName = useRef(`vendora-licencia-${Math.random().toString(36).slice(2)}`)
+
   useEffect(() => {
     let isMounted = true
 
@@ -56,7 +59,7 @@ export function useLicense(): LicensePermissions {
 
     // Realtime listener for instant plan/status changes from Admin Panel
     const channel = supabase
-      .channel('vendora-licencia-changes')
+      .channel(channelName.current)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'vendora_clientes' },

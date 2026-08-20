@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../auth/AuthContext'
-import { Search, Bell, LogOut, Circle, Smartphone, Copy, Check, X, ExternalLink } from 'lucide-react'
+import { Search, Bell, LogOut, Circle, Smartphone, Copy, Check, X, ExternalLink, PanelLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 
 type TopbarProps = {
   title: string
   subtitle?: string
+  onToggleSidebar?: () => void
 }
 
 interface NotificationAlert {
@@ -126,7 +127,7 @@ function ScannerQRModal({ negocioId, onClose }: { negocioId: string; onClose: ()
   )
 }
 
-export default function Topbar({ title }: TopbarProps) {
+export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
   const { profile, signOut } = useAuth()
   const [online, setOnline] = useState(navigator.onLine)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
@@ -220,12 +221,25 @@ export default function Topbar({ title }: TopbarProps) {
         />
       )}
 
-      <header className="flex items-center justify-between h-14 px-6 border-b border-gray-200 bg-white shrink-0 z-30 select-none">
-        {/* Left side breadcrumbs */}
-        <div className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500">
-          <span>Vendora</span>
-          <span>/</span>
-          <span className="text-gray-900 font-semibold">{title}</span>
+      <header className="flex items-center justify-between h-14 px-4 border-b border-gray-200 bg-white shrink-0 z-30 select-none">
+        {/* Left side: sidebar toggle + breadcrumbs */}
+        <div className="flex items-center gap-3">
+          {/* Sidebar Toggle — lives OUTSIDE the sidebar */}
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+              title="Colapsar / Expandir barra lateral"
+            >
+              <PanelLeft size={16} />
+            </button>
+          )}
+          {/* Breadcrumbs */}
+          <div className="flex items-center gap-1.5 text-[13px] font-medium text-gray-500">
+            <span>Vendora</span>
+            <span>/</span>
+            <span className="text-gray-900 font-semibold">{title}</span>
+          </div>
         </div>
 
         {/* Right side controls */}
