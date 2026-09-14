@@ -43,18 +43,18 @@ export function usePOS() {
     saveCartToStorage(cart)
   }, [cart])
 
-  const addToCart = useCallback((producto: Producto) => {
+  const addToCart = useCallback((producto: Producto, quantity: number = 1) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.producto.id === producto.id)
       if (existing) {
-        if (existing.cantidad >= producto.stock_actual) return prev
+        const nextQty = Math.min(producto.stock_actual, existing.cantidad + quantity)
         return prev.map((item) =>
           item.producto.id === producto.id
-            ? { ...item, cantidad: item.cantidad + 1 }
+            ? { ...item, cantidad: nextQty }
             : item
         )
       }
-      return [...prev, { producto, cantidad: 1 }]
+      return [...prev, { producto, cantidad: Math.min(producto.stock_actual, quantity) }]
     })
   }, [])
 

@@ -5,7 +5,7 @@ import { authService } from '../services/authService'
 import { toast } from '../components/ui/Toaster'
 import { Select } from '../components/ui/Select'
 import { SkeletonPage } from '../components/ui/Skeleton'
-import { Store, Users, Bell, Shield, ChevronRight, Loader2, Plus, X } from 'lucide-react'
+import { Store, Users, Bell, Shield, ChevronRight, Loader2, Plus, X, Scale } from 'lucide-react'
 
 import { useAuth } from '../components/auth/AuthContext'
 import { useLicense } from '../hooks/useLicense'
@@ -36,6 +36,8 @@ export default function SettingsPage() {
   const [storeAddress, setStoreAddress] = useState('')
   const [storePhone, setStorePhone] = useState('')
   const [rfc, setRfc] = useState('')
+  const [habilitarGranel, setHabilitarGranel] = useState(false)
+  const [unidadDefecto, setUnidadDefecto] = useState('kg')
   const [configId, setConfigId] = useState<string | null>(null)
   const [storeSaving, setStoreSaving] = useState(false)
 
@@ -82,6 +84,10 @@ export default function SettingsPage() {
           setStoreAddress(data.direccion || '')
           setStorePhone(data.telefono || '')
           setRfc(data.rfc || '')
+          setHabilitarGranel(Boolean(data.habilitar_granel ?? false))
+          setUnidadDefecto(data.unidad_medida_defecto || 'kg')
+          localStorage.setItem('vendora_habilitar_granel', String(data.habilitar_granel ?? false))
+          localStorage.setItem('vendora_unidad_granel_defecto', data.unidad_medida_defecto || 'kg')
           setMinStock(String(data.stock_minimo_alerta ?? 10))
           setNotifyCash(Boolean(data.notif_caja ?? true))
           setNotifyStock(Boolean(data.notif_stock ?? true))
@@ -132,6 +138,8 @@ export default function SettingsPage() {
         direccion: storeAddress,
         telefono: storePhone,
         rfc,
+        habilitar_granel: habilitarGranel,
+        unidad_medida_defecto: unidadDefecto,
         stock_minimo_alerta: parseInt(minStock) || 10,
         notif_caja: notifyCash,
         notif_stock: notifyStock,
@@ -150,6 +158,8 @@ export default function SettingsPage() {
         if (error) throw error
         if (data) setConfigId(data.id)
       }
+      localStorage.setItem('vendora_habilitar_granel', String(habilitarGranel))
+      localStorage.setItem('vendora_unidad_granel_defecto', unidadDefecto)
       toast('Configuración guardada correctamente', { type: 'success' })
     } catch (err: any) {
       toast('Error al guardar configuración', { type: 'error', description: err.message })
@@ -285,6 +295,62 @@ export default function SettingsPage() {
                     />
                   </div>
                 ))}
+
+                {/* ── MÓDULO DE VENTA A GRANEL Y PESO (BALANZA) ── */}
+                <div className="pt-3 border-t border-gray-100">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center">
+                          <Scale size={16} />
+                        </div>
+                        <div>
+                          <p className="text-[13px] font-bold text-slate-900">Venta a Granel, Peso y Balanza</p>
+                          <p className="text-[11px] text-slate-500">Ideal para graneros, minimarkets, carnicerías y ferreterías</p>
+                        </div>
+                      </div>
+
+                      {/* Switch */}
+                      <button
+                        type="button"
+                        onClick={() => setHabilitarGranel(!habilitarGranel)}
+                        className={[
+                          'w-11 h-6 rounded-full transition-colors relative cursor-pointer',
+                          habilitarGranel ? 'bg-slate-900' : 'bg-slate-300'
+                        ].join(' ')}
+                        title={habilitarGranel ? 'Desactivar modo granel' : 'Activar modo granel'}
+                      >
+                        <span
+                          className={[
+                            'w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs',
+                            habilitarGranel ? 'right-0.5' : 'left-0.5'
+                          ].join(' ')}
+                        />
+                      </button>
+                    </div>
+
+                    {habilitarGranel && (
+                      <div className="pt-2 border-t border-slate-200/80 flex items-center justify-between gap-4 animate-in fade-in duration-150">
+                        <div>
+                          <label className="text-[11px] font-semibold text-slate-700 block">Unidad de Medida Principal</label>
+                          <p className="text-[10px] text-slate-400">Unidad sugerida por defecto al crear nuevos productos</p>
+                        </div>
+                        <select
+                          value={unidadDefecto}
+                          onChange={(e) => setUnidadDefecto(e.target.value)}
+                          className="h-8 px-2.5 text-[12px] font-medium border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-slate-900"
+                        >
+                          <option value="kg">Kilogramos (kg)</option>
+                          <option value="lb">Libras (lb)</option>
+                          <option value="g">Gramos (g)</option>
+                          <option value="L">Litros (L)</option>
+                          <option value="m">Metros (m)</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="pt-2">
                   <button
                     onClick={saveStore}

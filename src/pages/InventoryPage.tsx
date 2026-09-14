@@ -21,6 +21,7 @@ import {
   RotateCcw,
   AlertTriangle,
   Trash2,
+  Scale,
 } from 'lucide-react'
 
 type AdjustReason = 'entry' | 'loss' | 'count'
@@ -98,8 +99,39 @@ export default function InventoryPage() {
   const [newProdStock, setNewProdStock] = useState('')
   const [newProdIva, setNewProdIva] = useState('19.00')
   const [newProdSupplier, setNewProdSupplier] = useState('')
+  const [newProdEsGranel, setNewProdEsGranel] = useState(false)
+  const [newProdUnidad, setNewProdUnidad] = useState('kg')
   const [selectedSupplierFilter, setSelectedSupplierFilter] = useState('all')
   const [suppliers, setSuppliers] = useState<any[]>([])
+
+  // Granel configuration
+  const [habilitarGranel, setHabilitarGranel] = useState(() => {
+    return localStorage.getItem('vendora_habilitar_granel') === 'true'
+  })
+  const [defaultUnidad, setDefaultUnidad] = useState(() => {
+    return localStorage.getItem('vendora_unidad_granel_defecto') || 'kg'
+  })
+
+  useEffect(() => {
+    async function checkGranelConfig() {
+      if (!profile?.negocio_id) return
+      try {
+        const { data } = await supabase
+          .from('configuracion_negocio')
+          .select('habilitar_granel, unidad_medida_defecto')
+          .eq('negocio_id', profile.negocio_id)
+          .maybeSingle()
+        if (data) {
+          setHabilitarGranel(Boolean(data.habilitar_granel))
+          setDefaultUnidad(data.unidad_medida_defecto || 'kg')
+          setNewProdUnidad(data.unidad_medida_defecto || 'kg')
+          localStorage.setItem('vendora_habilitar_granel', String(Boolean(data.habilitar_granel)))
+          localStorage.setItem('vendora_unidad_granel_defecto', data.unidad_medida_defecto || 'kg')
+        }
+      } catch (_) {}
+    }
+    checkGranelConfig()
+  }, [profile])
 
   const location = useLocation()
 
@@ -205,16 +237,21 @@ export default function InventoryPage() {
     e.preventDefault()
     if (!newProdName || !newProdSku || !newProdSale) return
 
+    const isGranel = habilitarGranel ? newProdEsGranel : false
+    const unidad = isGranel ? newProdUnidad : 'UND'
+
     const res = await addProducto({
       nombre: newProdName,
       codigo_barras: newProdSku,
       categoria: newProdCategory,
       precio_costo: parseFloat(newProdCost) || 0,
       precio_venta: parseFloat(newProdSale) || 0,
-      stock_actual: parseInt(newProdStock) || 0,
+      stock_actual: parseFloat(newProdStock) || 0,
       stock_minimo: 10,
       porcentaje_iva: Number.isFinite(parseFloat(newProdIva)) ? parseFloat(newProdIva) : 19.00,
-      proveedor_id: newProdSupplier || null
+      proveedor_id: newProdSupplier || null,
+      es_granel: isGranel,
+      unidad_medida: unidad
     } as any)
 
     if (res) {
@@ -237,6 +274,8 @@ export default function InventoryPage() {
     setNewProdStock('')
     setNewProdIva('19.00')
     setNewProdSupplier('')
+    setNewProdEsGranel(false)
+    setNewProdUnidad(defaultUnidad || 'kg')
   }
 
   if (loading) {
@@ -365,7 +404,15 @@ export default function InventoryPage() {
                             <span className="font-mono text-[11px] text-gray-400">{product.codigo_barras}</span>
                           </td>
                           <td className="px-4 py-2.5">
-                            <span className="text-[13px] font-medium text-gray-900">{product.nombre}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[13px] font-medium text-gray-900">{product.nombre}</span>
+                              {product.es_granel && (
+                                <span className="px-1.5 py-0.2 bg-blue-50 text-blue-700 text-[9px] font-bold rounded uppercase flex items-center gap-0.5 border border-blue-200/60 shrink-0">
+                                  <Scale size={9} />
+                                  <span>{product.unidad_medida || 'kg'}</span>
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-2.5">
                             <span className="text-[12px] font-medium text-gray-600">
@@ -391,7 +438,9 @@ export default function InventoryPage() {
                             ].join(' ')}>
                               {product.stock_actual}
                             </span>
-                            <span className="text-[11px] text-gray-400 ml-1">pza</span>
+                            <span className="text-[11px] text-gray-400 ml-1">
+                              {product.es_granel ? (product.unidad_medida || 'kg') : 'ud'}
+                            </span>
                           </td>
                           <td className="px-4 py-2.5">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${st?.className}`}>
@@ -636,6 +685,53 @@ export default function InventoryPage() {
             </div>
 
             <div className="px-5 py-4 space-y-3">
+              {/* Granel type toggle if enabled for store */}
+              {habilitarGranel && (
+                <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                  <label className="text-[11px] font-semibold text-slate-700 block">Tipo de Producto</label>
+                  <div className="grid grid-cols-2 gap-1.5 p-0.5 bg-white border border-slate-200 rounded-md">
+                    <button
+                      type="button"
+                      onClick={() => setNewProdEsGranel(false)}
+                      className={[
+                        'py-1 text-[11px] font-bold rounded transition-all cursor-pointer',
+                        !newProdEsGranel ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
+                      ].join(' ')}
+                    >
+                      📦 Por Unidad (UND)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewProdEsGranel(true)}
+                      className={[
+                        'py-1 text-[11px] font-bold rounded transition-all cursor-pointer flex items-center justify-center gap-1',
+                        newProdEsGranel ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'
+                      ].join(' ')}
+                    >
+                      <Scale size={12} />
+                      <span>A Granel / Peso</span>
+                    </button>
+                  </div>
+
+                  {newProdEsGranel && (
+                    <div className="flex items-center justify-between gap-2 pt-1 animate-in fade-in duration-100">
+                      <span className="text-[11px] font-medium text-slate-600">Unidad de Medida:</span>
+                      <select
+                        value={newProdUnidad}
+                        onChange={(e) => setNewProdUnidad(e.target.value)}
+                        className="h-7 px-2 text-[11px] font-bold border border-slate-200 rounded-md bg-white focus:outline-none"
+                      >
+                        <option value="kg">Kilogramos (kg)</option>
+                        <option value="lb">Libras (lb)</option>
+                        <option value="g">Gramos (g)</option>
+                        <option value="L">Litros (L)</option>
+                        <option value="m">Metros (m)</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide block mb-1">Nombre</label>
                 <input
@@ -643,19 +739,19 @@ export default function InventoryPage() {
                   required
                   value={newProdName}
                   onChange={(e) => setNewProdName(e.target.value)}
-                  placeholder="Ej: Leche Lala 1L"
+                  placeholder={newProdEsGranel ? 'Ej: Queso Costeño Fresco' : 'Ej: Leche Lala 1L'}
                   className="w-full h-8 px-3 text-[13px] border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-300"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide block mb-1">Código de Barras</label>
+                <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide block mb-1">Código de Barras o PLU</label>
                 <input
                   type="text"
                   required
                   value={newProdSku}
                   onChange={(e) => setNewProdSku(e.target.value)}
-                  placeholder="Ej: 7501055300897"
+                  placeholder="Ej: 7501055300897 o 001"
                   className="w-full h-8 px-3 text-[13px] border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-300"
                 />
               </div>
@@ -686,7 +782,9 @@ export default function InventoryPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide block mb-1">Venta ($)</label>
+                  <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide block mb-1 truncate" title={newProdEsGranel ? `Venta ($ / ${newProdUnidad})` : 'Venta ($)'}>
+                    {newProdEsGranel ? `Venta (/${newProdUnidad})` : 'Venta ($)'}
+                  </label>
                   <input
                     type="number"
                     step="0.01"
@@ -710,12 +808,15 @@ export default function InventoryPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide block mb-1">Stock</label>
+                  <label className="text-[11px] font-medium text-gray-500 uppercase tracking-wide block mb-1 truncate" title={newProdEsGranel ? `Stock (${newProdUnidad})` : 'Stock (ud)'}>
+                    {newProdEsGranel ? `Stock (${newProdUnidad})` : 'Stock (ud)'}
+                  </label>
                   <input
                     type="number"
+                    step="any"
                     value={newProdStock}
                     onChange={(e) => setNewProdStock(e.target.value)}
-                    placeholder="50"
+                    placeholder={newProdEsGranel ? '45.5' : '50'}
                     className="w-full h-8 px-3 text-[13px] border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-300 bg-white"
                   />
                 </div>

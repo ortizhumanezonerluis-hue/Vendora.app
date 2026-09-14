@@ -8,6 +8,8 @@ export interface Producto {
   stock_actual: number
   stock_minimo: number
   categoria: string
+  es_granel?: boolean
+  unidad_medida?: 'UND' | 'kg' | 'lb' | 'g' | 'L' | 'm' | string
 }
 
 export interface Venta {

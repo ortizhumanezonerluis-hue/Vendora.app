@@ -9,6 +9,8 @@ import { useRemoteScanner } from '../hooks/useRemoteScanner'
 import { useNavigate } from 'react-router-dom'
 import { SkeletonPage } from '../components/ui/Skeleton'
 import { cashService } from '../services/cashService'
+import GranelModal from '../components/pos/GranelModal'
+import { Producto } from '../types'
 import {
   Search,
   Plus,
@@ -21,6 +23,7 @@ import {
   X,
   Check,
   Loader2,
+  Scale,
 } from 'lucide-react'
 
 const CATEGORY_ALL = 'Todos'
@@ -35,14 +38,24 @@ export default function POSPage() {
   const userName = profile?.nombre || 'Cajero'
   const navigate = useNavigate()
 
+  // Granel Modal state
+  const [selectedGranelProd, setSelectedGranelProd] = useState<Producto | null>(null)
+  const [isGranelModalOpen, setIsGranelModalOpen] = useState(false)
+
   // Sincronización en tiempo real desde el celular (Supabase Broadcast Channel)
   useRemoteScanner(profile?.negocio_id, profile?.id, (code, mode) => {
     // Look up product by barcode
     const matched = productos.find((p) => p.codigo_barras === code)
     if (matched) {
       if (matched.stock_actual > 0) {
-        addToCart(matched)
-        toast(`Añadido al POS: ${matched.nombre}`, { type: 'success' })
+        if (matched.es_granel) {
+          setSelectedGranelProd(matched)
+          setIsGranelModalOpen(true)
+          toast(`Pesaje requerido: ${matched.nombre}`, { type: 'success' })
+        } else {
+          addToCart(matched)
+          toast(`Añadido al POS: ${matched.nombre}`, { type: 'success' })
+        }
       } else {
         toast(`El producto "${matched.nombre}" no tiene stock disponible`, { type: 'error' })
       }
@@ -184,9 +197,16 @@ export default function POSPage() {
                   return (
                     <button
                       key={prod.id}
-                      onClick={() => addToCart(prod)}
+                      onClick={() => {
+                        if (prod.es_granel) {
+                          setSelectedGranelProd(prod)
+                          setIsGranelModalOpen(true)
+                        } else {
+                          addToCart(prod)
+                        }
+                      }}
                       className={[
-                        'flex flex-col text-left p-3.5 bg-white rounded-xl hover:shadow-sm transition-all relative group',
+                        'flex flex-col text-left p-3.5 bg-white rounded-xl hover:shadow-sm transition-all relative group cursor-pointer',
                         inCart
                           ? 'border-2 border-gray-900 shadow-sm'
                           : 'border border-gray-200 hover:border-gray-900',
@@ -194,8 +214,8 @@ export default function POSPage() {
                     >
                       {/* Cart quantity badge on top right — only shows when in cart */}
                       {inCart && (
-                        <div className="absolute top-2 right-2 w-5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
-                          {cartItem.cantidad}
+                        <div className="absolute top-2 right-2 px-1.5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
+                          {prod.es_granel ? `${cartItem.cantidad.toFixed(2)} ${prod.unidad_medida || 'kg'}` : cartItem.cantidad}
                         </div>
                       )}
                       <div className="flex-1 min-w-0 pr-6 mt-1">
@@ -205,9 +225,14 @@ export default function POSPage() {
                       <div className="flex items-center justify-between mt-3">
                         <p className="text-[13px] font-bold text-gray-900 font-mono">
                           {formatCOP(prod.precio_venta)}
+                          {prod.es_granel && <span className="text-[10px] text-slate-400 font-normal">/{prod.unidad_medida || 'kg'}</span>}
                         </p>
-                        <span className="bg-gray-100 text-gray-500 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                          {prod.stock_actual} ud
+                        <span className={[
+                          'text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0',
+                          prod.es_granel ? 'bg-blue-50 text-blue-700 border border-blue-200/60' : 'bg-gray-100 text-gray-500'
+                        ].join(' ')}>
+                          {prod.es_granel && <Scale size={10} />}
+                          <span>{prod.stock_actual} {prod.es_granel ? (prod.unidad_medida || 'kg') : 'ud'}</span>
                         </span>
                       </div>
                     </button>
@@ -223,7 +248,7 @@ export default function POSPage() {
           <div className="px-4 py-3.5 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div>
               <p className="text-[13px] font-bold text-gray-900">Carrito de Cobro</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">{cart.reduce((a, c) => a + c.cantidad, 0)} artículos en lista</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">{cart.reduce((a, c) => a + c.cantidad, 0).toFixed(1).replace(/\.0$/, '')} artículos en lista</p>
             </div>
             {cart.length > 0 && (
               <button
@@ -247,29 +272,46 @@ export default function POSPage() {
               cart.map((item) => (
                 <div key={item.producto.id} className="px-4 py-3 flex items-center gap-3 hover:bg-gray-50/40 transition-colors">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-semibold text-gray-900 truncate">{item.producto.nombre}</p>
-                    <p className="text-[11px] text-gray-400 font-mono mt-0.5">{formatCOP(item.producto.precio_venta)} c/u</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-[12px] font-semibold text-gray-900 truncate">{item.producto.nombre}</p>
+                      {item.producto.es_granel && (
+                        <span className="px-1.5 py-0.2 bg-blue-50 text-blue-700 text-[9px] font-bold rounded uppercase">
+                          {item.producto.unidad_medida || 'kg'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+                      {item.producto.es_granel
+                        ? `${item.cantidad.toFixed(3)} ${item.producto.unidad_medida || 'kg'} × ${formatCOP(item.producto.precio_venta)}`
+                        : `${formatCOP(item.producto.precio_venta)} c/u`
+                      }
+                    </p>
+                    <p className="text-[12px] font-bold text-slate-900 font-mono mt-0.5">
+                      {formatCOP(item.producto.precio_venta * item.cantidad)}
+                    </p>
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     <div className="flex items-center border border-gray-200 rounded-md bg-white overflow-hidden h-6">
                       <button
-                        onClick={() => updateQty(item.producto.id, -1)}
-                        className="px-1.5 hover:bg-gray-50 text-gray-500 h-full flex items-center justify-center"
+                        onClick={() => updateQty(item.producto.id, item.producto.es_granel ? -0.25 : -1)}
+                        className="px-1.5 hover:bg-gray-50 text-gray-500 h-full flex items-center justify-center cursor-pointer"
                       >
                         <Minus size={10} />
                       </button>
-                      <span className="w-7 text-center text-[11px] font-bold font-mono text-gray-800">{item.cantidad}</span>
+                      <span className="px-1 text-center text-[11px] font-bold font-mono text-gray-800 min-w-[28px]">
+                        {item.producto.es_granel ? item.cantidad.toFixed(2) : item.cantidad}
+                      </span>
                       <button
-                        onClick={() => updateQty(item.producto.id, 1)}
+                        onClick={() => updateQty(item.producto.id, item.producto.es_granel ? 0.25 : 1)}
                         disabled={item.cantidad >= item.producto.stock_actual}
-                        className="px-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 h-full flex items-center justify-center"
+                        className="px-1.5 hover:bg-gray-50 text-gray-500 disabled:opacity-30 h-full flex items-center justify-center cursor-pointer"
                       >
                         <Plus size={10} />
                       </button>
                     </div>
                     <button
                       onClick={() => removeFromCart(item.producto.id)}
-                      className="text-[10px] text-gray-400 hover:text-red-500 font-semibold transition-colors flex items-center gap-0.5"
+                      className="text-[10px] text-gray-400 hover:text-red-500 font-semibold transition-colors flex items-center gap-0.5 cursor-pointer"
                     >
                       <Trash2 size={10} />
                       Quitar
@@ -384,6 +426,20 @@ export default function POSPage() {
           )}
         </div>
       </div>
+
+      {/* Modal de pesaje y cobro a granel (Dinero o Peso) */}
+      <GranelModal
+        isOpen={isGranelModalOpen}
+        producto={selectedGranelProd}
+        onClose={() => {
+          setIsGranelModalOpen(false)
+          setSelectedGranelProd(null)
+        }}
+        onAddToCart={(prod, qty) => {
+          addToCart(prod, qty)
+          toast(`Añadido: ${qty.toFixed(3)} ${prod.unidad_medida || 'kg'} de ${prod.nombre}`, { type: 'success' })
+        }}
+      />
     </MainLayout>
   )
 }
