@@ -6,6 +6,7 @@ import { Producto } from '../../types'
 import { toast } from '../ui/Toaster'
 import { Search, Scan, Save, Check, ArrowLeft, X, Package } from 'lucide-react'
 import { useRemoteScanner } from '../../hooks/useRemoteScanner'
+import { useBarcodeScanner } from '../../hooks/useBarcodeScanner'
 import { useAuth } from '../auth/AuthContext'
 
 interface AuditSessionProps {
@@ -216,6 +217,14 @@ export default function AuditSession({ session, onBack, onFinalize, usuarioNombr
   // Listen to remote (mobile) scanner — opens quantity modal
   useRemoteScanner(session.negocio_id, profile?.id, (code) => {
     openQtyModal(code, 'mobile')
+  })
+
+  // Listen to physical USB/Bluetooth barcode scanner gun
+  useBarcodeScanner({
+    onScan: (code) => {
+      openQtyModal(code, 'scanner')
+    },
+    enabled: !qtyModal
   })
 
   useEffect(() => {
