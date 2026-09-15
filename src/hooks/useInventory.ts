@@ -1,36 +1,9 @@
 import { useState, useEffect } from 'react'
 import { inventoryService } from '../services/inventoryService'
 import { Producto, MovimientoInventario } from '../types'
-import { products as mockProducts, movements as mockMovements } from '../data/mockData'
 import { offlineDb } from '../lib/offlineDb'
 
-// Helper to map mock product to DB Producto structure
-export function mapMockToDBProduct(p: any): Producto {
-  return {
-    id: p.id,
-    codigo_barras: p.sku || '',
-    plu: '',
-    nombre: p.name || '',
-    precio_costo: p.costPrice || 0,
-    precio_venta: p.salePrice || 0,
-    stock_actual: p.stock || 0,
-    stock_minimo: 10,
-    categoria: p.category || ''
-  }
-}
 
-// Helper to map mock movement to DB Movimiento structure
-export function mapMockToDBMovement(m: any): MovimientoInventario {
-  return {
-    id: m.id,
-    producto_id: m.productId || '',
-    tipo: m.type === 'entry' ? 'entry' : m.type === 'sale' ? 'salida' : m.type === 'loss' ? 'merma' : 'ajuste',
-    cantidad: m.qty || 0,
-    motivo: m.reason || '',
-    usuario_id: m.user || 'Sistema',
-    fecha: m.date || new Date().toISOString()
-  }
-}
 
 export function useInventory(negocioId?: string | null) {
   const [productos, setProductos] = useState<Producto[]>([])
@@ -43,24 +16,26 @@ export function useInventory(negocioId?: string | null) {
     setError(null)
     try {
       const prods = await inventoryService.getProductos(negocioId)
-      const movs = await inventoryService.getMovimientos()
+      let movs: MovimientoInventario[] = []
+      try {
+        movs = await inventoryService.getMovimientos()
+      } catch (_) {}
+      
       setProductos(prods)
       setMovimientos(movs)
-      // Save fresh copy in IndexedDB
-      if (prods && prods.length > 0) {
-        offlineDb.saveProductsCache(prods).catch(() => {})
+      
+      // Save fresh real products to offline cache
+      if (prods && prods.length >= 0) {
+        await offlineDb.saveProductsCache(prods)
       }
     } catch (err: any) {
-      console.warn('Fallo de conexión con Supabase. Intentando cargar desde caché local IndexedDB:', err)
-      setError(err.message || 'Error cargando datos')
+      console.warn('[Inventario] Fallo Supabase / Offline. Cargando desde caché local:', err)
+      setError(err.message || 'Sin conexión a internet')
       
+      // Load strictly from local cache (NEVER fake mock data)
       const cached = await offlineDb.getCachedProducts()
-      if (cached && cached.length > 0) {
-        setProductos(cached)
-      } else {
-        setProductos(mockProducts.map(mapMockToDBProduct))
-      }
-      setMovimientos(mockMovements.map(mapMockToDBMovement))
+      setProductos(cached || [])
+      setMovimientos([])
     } finally {
       setLoading(false)
     }
@@ -69,6 +44,7 @@ export function useInventory(negocioId?: string | null) {
   useEffect(() => {
     loadData()
   }, [negocioId])
+
 
   const addProducto = async (producto: Omit<Producto, 'id'>, usuario?: string) => {
     try {

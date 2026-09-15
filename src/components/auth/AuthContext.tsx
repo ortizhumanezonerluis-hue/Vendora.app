@@ -26,35 +26,33 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const SESSION_CACHE_KEY = 'vendora_auth_session_cache'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
+  // Synchronous initialization from cache prevents flashes of unauthenticated/empty state
+  const initialCache = restoreCachedSession()
+  const [user, setUser] = useState<any>(() => initialCache?.user || null)
+  const [profile, setProfile] = useState<UserProfile | null>(() => initialCache?.profile || null)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Persist session data to localStorage so we can restore it offline
   const cacheSession = (u: any, p: UserProfile | null) => {
     try {
-      localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ user: u, profile: p }))
+      if (u && p) {
+        localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ user: u, profile: p }))
+      }
     } catch { /* quota full, ignore */ }
   }
 
-  const restoreCachedSession = (): { user: any; profile: UserProfile | null } | null => {
+  const fetchProfile = async (email: string): Promise<UserProfile | null> => {
     try {
-      const raw = localStorage.getItem(SESSION_CACHE_KEY)
-      if (!raw) return null
-      return JSON.parse(raw)
+      const { data } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle()
+      return data
     } catch {
       return null
     }
-  }
-
-  const fetchProfile = async (email: string): Promise<UserProfile | null> => {
-    const { data } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('email', email)
-      .maybeSingle()
-    return data
   }
 
   useEffect(() => {
@@ -63,29 +61,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
           setUser(session.user)
-          try {
-            const prof = await fetchProfile(session.user.email!)
+          const prof = await fetchProfile(session.user.email!)
+          if (prof) {
             setProfile(prof)
             cacheSession(session.user, prof)
-          } catch {
-            // Network failed fetching profile — restore from cache if available
+          } else {
+            // If profile query returned null (or offline), preserve existing cached profile
             const cached = restoreCachedSession()
-            if (cached?.profile) setProfile(cached.profile)
+            if (cached?.profile) {
+              setProfile(cached.profile)
+            }
           }
         } else {
-          // No active Supabase session — try localStorage cache (offline scenario)
+          // No active Supabase session (e.g. offline) — restore from cache
           const cached = restoreCachedSession()
-          if (cached?.user) {
-            console.info('[Auth] Offline — restored session from cache')
+          if (cached?.user && cached?.profile) {
             setUser(cached.user)
             setProfile(cached.profile)
           }
         }
       } catch (err) {
-        // Supabase getSession failed (no network) — restore from localStorage cache
-        console.warn('[Auth] getSession failed, restoring from cache:', err)
         const cached = restoreCachedSession()
-        if (cached?.user) {
+        if (cached?.user && cached?.profile) {
           setUser(cached.user)
           setProfile(cached.profile)
         }
@@ -99,16 +96,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user)
-        try {
-          const prof = await fetchProfile(session.user.email!)
+        const prof = await fetchProfile(session.user.email!)
+        if (prof) {
           setProfile(prof)
           cacheSession(session.user, prof)
-        } catch {
+        } else {
           const cached = restoreCachedSession()
           if (cached?.profile) setProfile(cached.profile)
         }
       } else if (event === 'SIGNED_OUT') {
-        // Only clear state on explicit sign-out, not on network errors
         setUser(null)
         setProfile(null)
         try { localStorage.removeItem(SESSION_CACHE_KEY) } catch { /* ignore */ }
@@ -127,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await authService.signIn(e, p)
       setUser(res.user)
       setProfile(res.profile as UserProfile)
+      cacheSession(res.user, res.profile as UserProfile)
     } catch (err: any) {
       setError(err.message || 'Error al iniciar sesión')
       throw err
@@ -142,6 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await authService.signUpAdmin(e, p, n, b, d)
       setUser(res.user)
       setProfile(res.profile as UserProfile)
+      cacheSession(res.user, res.profile as UserProfile)
     } catch (err: any) {
       setError(err.message || 'Error al crear la cuenta')
       throw err
@@ -156,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authService.signOut()
       setUser(null)
       setProfile(null)
+      try { localStorage.removeItem(SESSION_CACHE_KEY) } catch { /* ignore */ }
     } catch (err: any) {
       console.error('Error al cerrar sesión:', err)
     } finally {
