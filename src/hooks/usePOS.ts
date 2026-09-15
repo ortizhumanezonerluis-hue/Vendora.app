@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { posService } from '../services/posService'
 import { Producto, Venta } from '../types'
+import { offlineDb } from '../lib/offlineDb'
 
 export interface CartItem {
   producto: Producto
@@ -86,43 +87,82 @@ export function usePOS() {
     paymentMethod: 'efectivo' | 'transferencia' | 'tarjeta',
     usuarioId: string = 'Sistema',
     negocioId?: string | null
-  ): Promise<Venta | null> => {
+  ): Promise<(Venta & { isOffline?: boolean }) | null> => {
     setLoading(true)
     setError(null)
     const total = cart.reduce((acc, item) => acc + item.producto.precio_venta * item.cantidad, 0)
     
-    try {
-      const saleData: Omit<Venta, 'id' | 'fecha'> & { negocio_id?: string | null } = {
-        usuario_id: usuarioId,
-        total,
-        metodo_pago: paymentMethod,
-        estado: 'completada',
-        negocio_id: negocioId
+    const saleData: Omit<Venta, 'id' | 'fecha'> & { negocio_id?: string | null } = {
+      usuario_id: usuarioId,
+      total,
+      metodo_pago: paymentMethod,
+      estado: 'completada',
+      negocio_id: negocioId
+    }
+
+    const items = cart.map((i) => ({
+      product: i.producto,
+      qty: i.cantidad
+    }))
+
+    // If completely offline or request fails, save to IndexedDB queue immediately
+    if (!navigator.onLine) {
+      const offlineSaleId = `OFFLINE_${Date.now()}`
+      await offlineDb.queueSale({
+        id: offlineSaleId,
+        saleData,
+        items,
+        timestamp: new Date().toISOString(),
+        status: 'pending'
+      })
+      // Update local product cache stocks immediately
+      for (const it of items) {
+        await offlineDb.updateCachedProductStock(it.product.id, it.qty)
       }
 
-      const items = cart.map((i) => ({
-        product: i.producto,
-        qty: i.cantidad
-      }))
-
-      const result = await posService.processSale(saleData, items)
       clearCart()
-      return result
-    } catch (err: any) {
-      console.warn('Fallo al procesar checkout en Supabase. Procesando localmente:', err)
-      setError(err.message || 'Error al procesar la venta')
-      
-      // Fallback local sale completion
-      const fakeSale: Venta = {
-        id: `V_${Date.now()}`,
+      setLoading(false)
+      return {
+        id: offlineSaleId,
         fecha: new Date().toISOString(),
         usuario_id: usuarioId,
         total,
         metodo_pago: paymentMethod,
-        estado: 'completada'
+        estado: 'completada',
+        isOffline: true
       }
+    }
+
+    try {
+      const result = await posService.processSale(saleData, items)
       clearCart()
-      return fakeSale
+      return result
+    } catch (err: any) {
+      console.warn('Fallo al procesar checkout online. Guardando en cola local IndexedDB:', err)
+      
+      const offlineSaleId = `OFFLINE_${Date.now()}`
+      await offlineDb.queueSale({
+        id: offlineSaleId,
+        saleData,
+        items,
+        timestamp: new Date().toISOString(),
+        status: 'pending',
+        error: err.message
+      })
+      for (const it of items) {
+        await offlineDb.updateCachedProductStock(it.product.id, it.qty)
+      }
+
+      clearCart()
+      return {
+        id: offlineSaleId,
+        fecha: new Date().toISOString(),
+        usuario_id: usuarioId,
+        total,
+        metodo_pago: paymentMethod,
+        estado: 'completada',
+        isOffline: true
+      }
     } finally {
       setLoading(false)
     }

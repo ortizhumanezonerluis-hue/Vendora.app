@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../auth/AuthContext'
-import { Search, Bell, LogOut, Circle, Smartphone, Copy, Check, X, ExternalLink, PanelLeft } from 'lucide-react'
+import { Search, Bell, LogOut, Smartphone, Copy, Check, X, ExternalLink, PanelLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
+import NetworkStatusBadge from '../offline/NetworkStatusBadge'
 
 type TopbarProps = {
   title: string
@@ -269,11 +270,8 @@ export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
             </button>
           )}
 
-          {/* Connection status */}
-          <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-            <Circle size={8} fill={online ? '#22C55E' : '#9CA3AF'} className={online ? 'text-green-500' : 'text-gray-400'} />
-            <span>{online ? 'Sincronizado' : 'Desconectado'}</span>
-          </div>
+          {/* Connection status badge & offline pending sync trigger */}
+          <NetworkStatusBadge />
 
           {/* Role Badge */}
           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200 capitalize">

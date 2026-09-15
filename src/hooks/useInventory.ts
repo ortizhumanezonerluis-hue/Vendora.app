@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { inventoryService } from '../services/inventoryService'
 import { Producto, MovimientoInventario } from '../types'
 import { products as mockProducts, movements as mockMovements } from '../data/mockData'
+import { offlineDb } from '../lib/offlineDb'
 
 // Helper to map mock product to DB Producto structure
 export function mapMockToDBProduct(p: any): Producto {
@@ -45,10 +46,20 @@ export function useInventory(negocioId?: string | null) {
       const movs = await inventoryService.getMovimientos()
       setProductos(prods)
       setMovimientos(movs)
+      // Save fresh copy in IndexedDB
+      if (prods && prods.length > 0) {
+        offlineDb.saveProductsCache(prods).catch(() => {})
+      }
     } catch (err: any) {
-      console.warn('Fallo de conexión con Supabase. Usando mock data como fallback:', err)
+      console.warn('Fallo de conexión con Supabase. Intentando cargar desde caché local IndexedDB:', err)
       setError(err.message || 'Error cargando datos')
-      setProductos(mockProducts.map(mapMockToDBProduct))
+      
+      const cached = await offlineDb.getCachedProducts()
+      if (cached && cached.length > 0) {
+        setProductos(cached)
+      } else {
+        setProductos(mockProducts.map(mapMockToDBProduct))
+      }
       setMovimientos(mockMovements.map(mapMockToDBMovement))
     } finally {
       setLoading(false)

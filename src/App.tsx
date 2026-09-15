@@ -24,11 +24,13 @@ import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminPage from './pages/admin/AdminPage'
 import AdminRoute from './components/auth/AdminRoute'
 import { Toaster } from './components/ui/Toaster'
+import SyncModal from './components/offline/SyncModal'
 
 export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <SyncModal />
         <Routes>
           {/* Public Landing Page */}
           <Route path="/" element={<LandingPage />} />

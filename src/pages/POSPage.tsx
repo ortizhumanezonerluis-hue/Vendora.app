@@ -125,7 +125,11 @@ export default function POSPage() {
       setCheckoutState('success')
       refreshInventory()
       clearCart()
-      toast(`Venta procesada con éxito · Ticket #${result.id.slice(0, 8).toUpperCase()}`, { type: 'success' })
+      if ((result as any).isOffline) {
+        toast(`⚠️ Venta guardada localmente (Modo Offline) · Ticket #${result.id.slice(0, 10)}`, { type: 'success' })
+      } else {
+        toast(`Venta procesada con éxito · Ticket #${result.id.slice(0, 8).toUpperCase()}`, { type: 'success' })
+      }
       setTimeout(() => {
         setCheckoutState('idle')
         setCashInput('')

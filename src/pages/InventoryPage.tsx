@@ -5,7 +5,7 @@ import { useInventory } from '../hooks/useInventory'
 import { useAuth } from '../components/auth/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { Producto } from '../types'
-import { formatCOP } from '../lib/utils'
+import { formatCOP, formatStock } from '../lib/utils'
 import { toast } from '../components/ui/Toaster'
 import { SkeletonPage } from '../components/ui/Skeleton'
 import { Select } from '../components/ui/Select'
@@ -207,6 +207,13 @@ export default function InventoryPage() {
     [movimientos, historyProduct]
   )
 
+  // Metrics calculations (Clean aggregation separating items vs units)
+  const stockSummary = useMemo(() => {
+    const totalCount = productos.reduce((sum, p) => sum + (p.stock_actual || 0), 0)
+    const hasDecimals = totalCount % 1 !== 0
+    return hasDecimals ? Number(totalCount.toFixed(2)).toLocaleString('es-CO') : totalCount.toLocaleString('es-CO')
+  }, [productos])
+
   const applyAdjustment = async () => {
     if (!adjustProduct || !adjustQty) return
     const qty = parseInt(adjustQty)
@@ -293,7 +300,7 @@ export default function InventoryPage() {
         <div className="grid grid-cols-4 gap-3">
           {[
             { label: 'Total productos', value: productos.length, icon: Package },
-            { label: 'Stock General', value: productos.reduce((sum, p) => sum + (p.stock_actual || 0), 0), icon: TrendingUp },
+            { label: 'Stock General', value: stockSummary, icon: TrendingUp },
             { label: 'Stock bajo', value: productos.filter((p) => getProductStatus(p) === 'low').length, icon: AlertTriangle },
             { label: 'Sin stock', value: productos.filter((p) => getProductStatus(p) === 'out').length, icon: X },
           ].map(({ label, value, icon: Icon }) => (
@@ -436,7 +443,7 @@ export default function InventoryPage() {
                               'text-[13px] font-mono font-semibold',
                               product.stock_actual === 0 ? 'text-red-600' : product.stock_actual < product.stock_minimo ? 'text-amber-600' : 'text-gray-900'
                             ].join(' ')}>
-                              {product.stock_actual}
+                              {formatStock(product.stock_actual, product.es_granel)}
                             </span>
                             <span className="text-[11px] text-gray-400 ml-1">
                               {product.es_granel ? (product.unidad_medida || 'kg') : 'ud'}
