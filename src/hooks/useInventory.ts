@@ -101,7 +101,7 @@ export function useInventory(negocioId?: string | null) {
       // Optimistically update local stock
       setProductos((prev) => prev.map((p) => {
         if (p.id === movimiento.producto_id) {
-          return { ...p, stock_actual: Math.max(0, p.stock_actual + movimiento.cantidad) }
+          return { ...p, stock_actual: Number(((p.stock_actual || 0) + movimiento.cantidad).toFixed(3)) }
         }
         return p
       }))
@@ -117,12 +117,13 @@ export function useInventory(negocioId?: string | null) {
       setMovimientos((prev) => [fakeMov, ...prev])
       setProductos((prev) => prev.map((p) => {
         if (p.id === movimiento.producto_id) {
-          return { ...p, stock_actual: Math.max(0, p.stock_actual + movimiento.cantidad) }
+          return { ...p, stock_actual: Number(((p.stock_actual || 0) + movimiento.cantidad).toFixed(3)) }
         }
         return p
       }))
       return fakeMov
     }
+
   }
 
   return {

@@ -138,7 +138,7 @@ export const offlineDb = {
       req.onsuccess = () => {
         const prod = req.result as Producto
         if (prod) {
-          prod.stock_actual = Math.max(0, prod.stock_actual - deltaQty)
+          prod.stock_actual = Number(((prod.stock_actual || 0) - deltaQty).toFixed(3))
           store.put(prod)
         }
       }
@@ -146,11 +146,12 @@ export const offlineDb = {
       // Fallback: update in localStorage products cache
       const products = lsQueue.getProducts()
       const updated = products.map((p) =>
-        p.id === productId ? { ...p, stock_actual: Math.max(0, p.stock_actual - deltaQty) } : p
+        p.id === productId ? { ...p, stock_actual: Number(((p.stock_actual || 0) - deltaQty).toFixed(3)) } : p
       )
       lsQueue.saveProducts(updated)
     }
   },
+
 
   // SALES QUEUE
   async queueSale(sale: QueuedSale): Promise<void> {

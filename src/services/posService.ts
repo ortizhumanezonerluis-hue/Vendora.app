@@ -125,7 +125,7 @@ export const posService = {
         console.warn('No se pudo guardar detalle de venta:', err)
       }
 
-      const newStock = Math.max(0, item.product.stock_actual - item.qty)
+      const newStock = Number((item.product.stock_actual - item.qty).toFixed(3))
       try {
         const { error: stockError } = await supabase
           .from('productos')
@@ -135,6 +135,7 @@ export const posService = {
       } catch (err) {
         console.warn('No se pudo actualizar stock:', err)
       }
+
 
       // Movement (kardex)
       try {

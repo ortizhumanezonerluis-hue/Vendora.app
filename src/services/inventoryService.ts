@@ -97,15 +97,16 @@ export const inventoryService = {
       .single()
     if (fetchError) throw fetchError
 
-    // 3. Calculate and persist new stock
+    // 3. Calculate and persist new stock (supports absorbing negative over-sale balances)
     const resolvedMin = producto.stock_minimo ?? stockMinimo
-    const newStock = Math.max(0, (producto.stock_actual || 0) + movimiento.cantidad)
+    const newStock = Number(((producto.stock_actual || 0) + movimiento.cantidad).toFixed(3))
 
     const { error: updateError } = await supabase
       .from('productos')
       .update({ stock_actual: newStock })
       .eq('id', movimiento.producto_id)
     if (updateError) throw updateError
+
 
     const usuario = movimiento.usuario_id || 'Sistema'
     const tipoLabel = movimiento.tipo === 'entrada' ? 'Entrada de mercancía'
