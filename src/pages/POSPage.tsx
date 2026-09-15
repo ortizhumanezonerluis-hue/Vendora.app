@@ -103,8 +103,30 @@ export default function POSPage() {
   const processPayment = async () => {
     if (processing) return // prevent double submission
     
-    // Enforce register check: check if cashier actually has an active session open
     setProcessing(true)
+
+    // When offline, skip the session check and go directly to offline checkout
+    if (!navigator.onLine) {
+      const dbPaymentMethod = payMethod === 'cash' ? 'efectivo' : payMethod === 'card' ? 'tarjeta' : 'transferencia'
+      setCheckoutState('paying')
+      const result = await checkout(dbPaymentMethod, userName, profile?.negocio_id)
+      if (result) {
+        setCheckoutState('success')
+        clearCart()
+        toast(`⚠️ Venta guardada sin conexión · se sincronizará al reconectar`, { type: 'success' })
+        setTimeout(() => {
+          setCheckoutState('idle')
+          setCashInput('')
+          setProcessing(false)
+        }, 2000)
+      } else {
+        setCheckoutState('idle')
+        setProcessing(false)
+      }
+      return
+    }
+
+    // Online flow: verify the cashier has an active register session first
     try {
       const active = await cashService.getActiveSession(userName, profile?.negocio_id)
       if (!active) {
