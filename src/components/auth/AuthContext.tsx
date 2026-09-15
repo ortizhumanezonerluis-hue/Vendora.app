@@ -23,11 +23,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+const SESSION_CACHE_KEY = 'vendora_auth_session_cache'
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Persist session data to localStorage so we can restore it offline
+  const cacheSession = (u: any, p: UserProfile | null) => {
+    try {
+      localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ user: u, profile: p }))
+    } catch { /* quota full, ignore */ }
+  }
+
+  const restoreCachedSession = (): { user: any; profile: UserProfile | null } | null => {
+    try {
+      const raw = localStorage.getItem(SESSION_CACHE_KEY)
+      if (!raw) return null
+      return JSON.parse(raw)
+    } catch {
+      return null
+    }
+  }
 
   const fetchProfile = async (email: string): Promise<UserProfile | null> => {
     const { data } = await supabase
@@ -44,11 +63,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
           setUser(session.user)
-          const prof = await fetchProfile(session.user.email!)
-          setProfile(prof)
+          try {
+            const prof = await fetchProfile(session.user.email!)
+            setProfile(prof)
+            cacheSession(session.user, prof)
+          } catch {
+            // Network failed fetching profile — restore from cache if available
+            const cached = restoreCachedSession()
+            if (cached?.profile) setProfile(cached.profile)
+          }
+        } else {
+          // No active Supabase session — try localStorage cache (offline scenario)
+          const cached = restoreCachedSession()
+          if (cached?.user) {
+            console.info('[Auth] Offline — restored session from cache')
+            setUser(cached.user)
+            setProfile(cached.profile)
+          }
         }
       } catch (err) {
-        console.warn('Fallo al recuperar sesión:', err)
+        // Supabase getSession failed (no network) — restore from localStorage cache
+        console.warn('[Auth] getSession failed, restoring from cache:', err)
+        const cached = restoreCachedSession()
+        if (cached?.user) {
+          setUser(cached.user)
+          setProfile(cached.profile)
+        }
       } finally {
         setLoading(false)
       }
@@ -59,17 +99,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setUser(session.user)
-        const prof = await fetchProfile(session.user.email!)
-        setProfile(prof)
-      } else {
+        try {
+          const prof = await fetchProfile(session.user.email!)
+          setProfile(prof)
+          cacheSession(session.user, prof)
+        } catch {
+          const cached = restoreCachedSession()
+          if (cached?.profile) setProfile(cached.profile)
+        }
+      } else if (event === 'SIGNED_OUT') {
+        // Only clear state on explicit sign-out, not on network errors
         setUser(null)
         setProfile(null)
+        try { localStorage.removeItem(SESSION_CACHE_KEY) } catch { /* ignore */ }
       }
       setLoading(false)
     })
 
     return () => { subscription.unsubscribe() }
   }, [])
+
 
   const signIn = async (e: string, p: string) => {
     setLoading(true)
