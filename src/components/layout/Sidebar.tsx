@@ -13,6 +13,7 @@ import {
   BarChart3,
   ShoppingBag,
   ClipboardList,
+  ClipboardCheck,
   Settings,
   Store,
   FileCode,
@@ -23,13 +24,15 @@ import {
   FolderCheck,
   Landmark,
   Coins,
-  Lock
+  Lock,
+  Activity
 } from 'lucide-react'
 
-// Main App Navigation Items (NO Dashboard — that belongs only in the Admin panel)
+// Main App Navigation Items
 const mainNav = [
   { to: '/pos', icon: ShoppingCart, label: 'Punto de Venta', adminOnly: false, requiredPlan: 'starter' },
   { to: '/inventario', icon: Package, label: 'Inventario', adminOnly: false, requiredPlan: 'starter' },
+  { to: '/auditoria-fisica', icon: ClipboardCheck, label: 'Auditoría Física', adminOnly: true, requiredPlan: 'starter' },
   { to: '/escaneo', icon: Scan, label: 'Escáner', adminOnly: false, requiredPlan: 'starter' },
   { to: '/caja', icon: Wallet, label: 'Arqueo de Caja', adminOnly: false, requiredPlan: 'starter' },
   { to: '/historial-caja', icon: History, label: 'Historial de Cajas', adminOnly: false, requiredPlan: 'starter' },
@@ -37,8 +40,9 @@ const mainNav = [
   { to: '/comprobantes', icon: FileCode, label: 'Comprobantes de Venta', adminOnly: true, requiredPlan: 'starter' },
   { to: '/reportes', icon: BarChart3, label: 'Informes', adminOnly: true, requiredPlan: 'starter' },
   { to: '/contabilidad/libro-fiscal', icon: Scale, label: 'Contabilidad', adminOnly: true, requiredPlan: 'max' },
-  { to: '/auditoria', icon: ClipboardList, label: 'Logs del Sistema', adminOnly: true, requiredPlan: 'pro' },
+  { to: '/auditoria-logs', icon: Activity, label: 'Logs del Sistema', adminOnly: true, requiredPlan: 'pro' },
 ]
+
 
 // Accounting Context Navigation Items
 const accountingNav = [

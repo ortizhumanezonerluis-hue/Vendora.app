@@ -123,8 +123,9 @@ export default function AuditPage() {
   }
 
   return (
-    <MainLayout title="Gestión detallada de inventario">
+    <MainLayout title="Auditoría Física de Inventario">
       <div className="p-5 space-y-5 max-w-[1400px]">
+
         
         {/* Active counting screen handles layout internally */}
         {activeSession && !showSummary ? (

@@ -101,10 +101,26 @@ export default function App() {
           
           {/* Admin-only Routes */}
           <Route
+            path="/auditoria-logs"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AuditLogsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/auditoria"
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AuditLogsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/auditoria-fisica"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AuditPage />
               </ProtectedRoute>
             }
           />
@@ -116,6 +132,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/configuracion"
             element={
