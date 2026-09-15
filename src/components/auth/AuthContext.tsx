@@ -25,6 +25,24 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const SESSION_CACHE_KEY = 'vendora_auth_session_cache'
 
+function restoreCachedSession(): { user: any; profile: UserProfile | null } | null {
+  try {
+    const raw = localStorage.getItem(SESSION_CACHE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function cacheSession(u: any, p: UserProfile | null) {
+  try {
+    if (u && p) {
+      localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ user: u, profile: p }))
+    }
+  } catch { /* quota full, ignore */ }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   // Synchronous initialization from cache prevents flashes of unauthenticated/empty state
   const initialCache = restoreCachedSession()
@@ -32,15 +50,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(() => initialCache?.profile || null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Persist session data to localStorage so we can restore it offline
-  const cacheSession = (u: any, p: UserProfile | null) => {
-    try {
-      if (u && p) {
-        localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({ user: u, profile: p }))
-      }
-    } catch { /* quota full, ignore */ }
-  }
 
   const fetchProfile = async (email: string): Promise<UserProfile | null> => {
     try {
@@ -54,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null
     }
   }
+
 
   useEffect(() => {
     async function checkSession() {
