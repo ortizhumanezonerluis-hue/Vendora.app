@@ -207,11 +207,49 @@ export default function InventoryPage() {
     [movimientos, historyProduct]
   )
 
-  // Metrics calculations (Clean aggregation separating items vs units)
-  const stockSummary = useMemo(() => {
-    const totalCount = productos.reduce((sum, p) => sum + (p.stock_actual || 0), 0)
-    const hasDecimals = totalCount % 1 !== 0
-    return hasDecimals ? Number(totalCount.toFixed(2)).toLocaleString('es-CO') : totalCount.toLocaleString('es-CO')
+  // Metrics calculations: cleanly separate discrete items from weight/bulk stock
+  const stockMetric = useMemo(() => {
+    const unitProducts = productos.filter((p) => !p.es_granel)
+    const granelProducts = productos.filter((p) => p.es_granel)
+
+    const totalUnits = unitProducts.reduce((sum, p) => sum + (Math.round(p.stock_actual) || 0), 0)
+
+    if (granelProducts.length === 0) {
+      return {
+        main: totalUnits.toLocaleString('es-CO'),
+        unit: 'uds',
+        sub: `${productos.length} productos en total`,
+        hasGranel: false
+      }
+    }
+
+    // Group granel stock by unit of measurement (kg, lb, g, L, etc.)
+    const granelByUnit: Record<string, number> = {}
+    granelProducts.forEach((p) => {
+      const u = p.unidad_medida || 'kg'
+      granelByUnit[u] = (granelByUnit[u] || 0) + (p.stock_actual || 0)
+    })
+
+    const granelParts = Object.entries(granelByUnit).map(([unit, val]) => {
+      const formatted = val % 1 !== 0 ? Number(val.toFixed(2)).toLocaleString('es-CO') : val.toLocaleString('es-CO')
+      return `${formatted} ${unit}`
+    })
+
+    if (unitProducts.length === 0) {
+      return {
+        main: granelParts.join(' · '),
+        unit: '',
+        sub: `${granelProducts.length} productos a granel`,
+        hasGranel: true
+      }
+    }
+
+    return {
+      main: `${totalUnits.toLocaleString('es-CO')} uds`,
+      unit: '',
+      sub: `+ ${granelParts.join(' · ')} a granel`,
+      hasGranel: true
+    }
   }, [productos])
 
   const applyAdjustment = async () => {
@@ -297,22 +335,67 @@ export default function InventoryPage() {
     <MainLayout title="Inventario">
       <div className="p-5 space-y-4">
         {/* Summary cards */}
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            { label: 'Total productos', value: productos.length, icon: Package },
-            { label: 'Stock General', value: stockSummary, icon: TrendingUp },
-            { label: 'Stock bajo', value: productos.filter((p) => getProductStatus(p) === 'low').length, icon: AlertTriangle },
-            { label: 'Sin stock', value: productos.filter((p) => getProductStatus(p) === 'out').length, icon: X },
-          ].map(({ label, value, icon: Icon }) => (
-            <div key={label} className="bg-white border border-gray-200 rounded-lg px-4 py-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">{label}</span>
-                <Icon size={13} className="text-gray-400" />
-              </div>
-              <p className="text-2xl font-semibold text-gray-900 mt-1 font-mono">{value}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Card 1: Total productos */}
+          <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">Total productos</span>
+              <Package size={13} className="text-gray-400" />
             </div>
-          ))}
+            <div className="mt-1">
+              <p className="text-2xl font-semibold text-gray-900 font-mono">{productos.length}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">Catálogo general</p>
+            </div>
+          </div>
+
+          {/* Card 2: Stock General Inteligente */}
+          <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">Stock General</span>
+              <TrendingUp size={13} className="text-gray-400" />
+            </div>
+            <div className="mt-1">
+              <div className="flex items-baseline gap-1">
+                <p className="text-2xl font-semibold text-gray-900 font-mono">{stockMetric.main}</p>
+                {stockMetric.unit && <span className="text-[12px] font-medium text-gray-500">{stockMetric.unit}</span>}
+              </div>
+              {stockMetric.sub && (
+                <p className="text-[11px] text-blue-600 font-medium truncate mt-0.5" title={stockMetric.sub}>
+                  {stockMetric.sub}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Stock bajo */}
+          <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">Stock bajo</span>
+              <AlertTriangle size={13} className="text-amber-500" />
+            </div>
+            <div className="mt-1">
+              <p className="text-2xl font-semibold text-amber-600 font-mono">
+                {productos.filter((p) => getProductStatus(p) === 'low').length}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">Por debajo del mínimo</p>
+            </div>
+          </div>
+
+          {/* Card 4: Sin stock */}
+          <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-gray-500 uppercase tracking-wide font-medium">Sin stock</span>
+              <X size={13} className="text-red-500" />
+            </div>
+            <div className="mt-1">
+              <p className="text-2xl font-semibold text-red-600 font-mono">
+                {productos.filter((p) => getProductStatus(p) === 'out').length}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">Agotados</p>
+            </div>
+          </div>
         </div>
+
 
         {/* Tabs and Add Product Button */}
         <div className="flex justify-between items-end border-b border-gray-200">
