@@ -54,11 +54,43 @@ export const adminService = {
         .select('*')
         .order('creado_en', { ascending: false })
 
-      let allList: VendoraCliente[] = dbClientes || []
+      let rawList: VendoraCliente[] = dbClientes || []
 
-      // 2. Check real-time online presence (if last connection was < 5 min ago)
+      // 2. Intelligent Deduplication: if an email was registered twice,
+      // keep the record with a valid negocio_id and/or active license
+      const seenEmails = new Set<string>()
+      const seenNegocios = new Set<string>()
+      const deduplicated: VendoraCliente[] = []
+
+      // Pass 1: Add records with valid negocio_id
+      for (const c of rawList) {
+        const emailKey = c.email_acceso?.toLowerCase().trim()
+        const negocioKey = c.negocio_id?.trim()
+
+        if (negocioKey) {
+          if (!seenNegocios.has(negocioKey)) {
+            seenNegocios.add(negocioKey)
+            if (emailKey) seenEmails.add(emailKey)
+            deduplicated.push(c)
+          }
+        }
+      }
+
+      // Pass 2: Add any remaining unique entries
+      for (const c of rawList) {
+        const emailKey = c.email_acceso?.toLowerCase().trim()
+        const idKey = c.id
+        if (emailKey && !seenEmails.has(emailKey)) {
+          seenEmails.add(emailKey)
+          deduplicated.push(c)
+        } else if (!emailKey && !deduplicated.some(x => x.id === idKey)) {
+          deduplicated.push(c)
+        }
+      }
+
+      // 3. Check real-time online presence (if last connection was < 5 min ago)
       const now = Date.now()
-      allList = allList.map(c => {
+      const allList = deduplicated.map(c => {
         const lastConn = c.ultima_conexion ? new Date(c.ultima_conexion).getTime() : 0
         const isRecentlyActive = (now - lastConn) < 5 * 60 * 1000
         return {
@@ -75,6 +107,7 @@ export const adminService = {
 
     return localClientesState
   },
+
 
   // ==========================================
   // 2. UPDATE CLIENT (Plan, Status, Cut Date)

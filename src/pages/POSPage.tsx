@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import MainLayout from '../components/layout/MainLayout'
 import { useInventory } from '../hooks/useInventory'
 import { usePOS } from '../hooks/usePOS'
@@ -6,6 +6,7 @@ import { useAuth } from '../components/auth/AuthContext'
 import { formatCOP } from '../lib/utils'
 import { toast } from '../components/ui/Toaster'
 import { useRemoteScanner } from '../hooks/useRemoteScanner'
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner'
 import { useNavigate } from 'react-router-dom'
 import { SkeletonPage } from '../components/ui/Skeleton'
 import { cashService } from '../services/cashService'
@@ -42,29 +43,41 @@ export default function POSPage() {
   const [selectedGranelProd, setSelectedGranelProd] = useState<Producto | null>(null)
   const [isGranelModalOpen, setIsGranelModalOpen] = useState(false)
 
-  // Sincronización en tiempo real desde el celular (Supabase Broadcast Channel)
-  useRemoteScanner(profile?.negocio_id, profile?.id, (code, mode) => {
-    // Look up product by barcode
-    const matched = productos.find((p) => p.codigo_barras === code)
+  // Unified barcode handler (Works for USB Laser Guns, Bluetooth, and Mobile Scanner)
+  const handleBarcodeScanned = useCallback((code: string) => {
+    const cleanCode = code.trim()
+    const matched = productos.find((p) => p.codigo_barras === cleanCode)
     if (matched) {
       if (matched.stock_actual > 0) {
         if (matched.es_granel) {
           setSelectedGranelProd(matched)
           setIsGranelModalOpen(true)
-          toast(`Pesaje requerido: ${matched.nombre}`, { type: 'success' })
+          toast(`⚖️ Pesaje requerido: ${matched.nombre}`, { type: 'success' })
         } else {
           addToCart(matched)
-          toast(`Añadido al POS: ${matched.nombre}`, { type: 'success' })
+          toast(`⚡ Añadido: ${matched.nombre}`, { type: 'success' })
         }
       } else {
-        toast(`El producto "${matched.nombre}" no tiene stock disponible`, { type: 'error' })
+        toast(`⚠️ El producto "${matched.nombre}" no tiene stock disponible`, { type: 'error' })
       }
     } else {
-      // Product does not exist. Redirect to /inventario with auto-fill query params
-      toast(`Código ${code} no registrado. Redirigiendo a catálogo...`, { type: 'success' })
-      navigate('/inventario', { state: { autoOpenAddModal: true, autoFillSku: code } })
+      // Product not found -> redirect to inventory to register
+      toast(`Código ${cleanCode} no registrado. Redirigiendo a catálogo...`, { type: 'warning' })
+      navigate('/inventario', { state: { autoOpenAddModal: true, autoFillSku: cleanCode } })
     }
+  }, [productos, addToCart, navigate])
+
+  // 1. Hardware Scanner (Pistola USB / Bluetooth / Wireless 2.4G)
+  useBarcodeScanner({
+    onScan: handleBarcodeScanned,
+    enabled: !isGranelModalOpen
   })
+
+  // 2. Mobile Scanner (Celular vía Supabase Broadcast)
+  useRemoteScanner(profile?.negocio_id, profile?.id, (code) => {
+    handleBarcodeScanned(code)
+  })
+
 
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState(CATEGORY_ALL)

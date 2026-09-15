@@ -10,6 +10,7 @@ import { toast } from '../components/ui/Toaster'
 import { SkeletonPage } from '../components/ui/Skeleton'
 import { Select } from '../components/ui/Select'
 import { useRemoteScanner } from '../hooks/useRemoteScanner'
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner'
 import { smartLookupBarcode, indexProductBackground } from '../services/smartProductLookup'
 import {
   Search,
@@ -54,33 +55,6 @@ export default function InventoryPage() {
   const { productos, movimientos, loading, error, registrarMovimiento, addProducto, deleteProducto } = useInventory(profile?.negocio_id)
   const isAdmin = profile?.rol === 'admin'
 
-  // Capture remote scans for autofilling product creation forms
-  useRemoteScanner(profile?.negocio_id, profile?.id, async (code, mode) => {
-    if (mode === 'form') {
-      setNewProdSku(code)
-      setShowAddModal(true)
-      toast(`Código cargado desde celular: ${code}`, { type: 'success' })
-      
-      // Query 3-tier smart catalog cascade
-      try {
-        const result = await smartLookupBarcode(code)
-        if (result) {
-          setNewProdName(result.name)
-          setNewProdCategory(result.category)
-          setNewProdIva(String(result.default_iva))
-          toast('🟢 Producto identificado automáticamente', { type: 'success' })
-          // Shift focus to price cost input field after a small delay for render
-          setTimeout(() => {
-            const costEl = document.getElementById('new-prod-cost')
-            if (costEl) (costEl as HTMLInputElement).focus()
-          }, 200)
-        }
-      } catch (err) {
-        console.warn('Smart lookup failed:', err)
-      }
-    }
-  })
-
   const [search, setSearch] = useState('')
   const [adjustProduct, setAdjustProduct] = useState<Producto | null>(null)
   const [historyProduct, setHistoryProduct] = useState<Producto | null>(null)
@@ -103,6 +77,49 @@ export default function InventoryPage() {
   const [newProdUnidad, setNewProdUnidad] = useState('kg')
   const [selectedSupplierFilter, setSelectedSupplierFilter] = useState('all')
   const [suppliers, setSuppliers] = useState<any[]>([])
+
+  // Hardware Scanner & Mobile Scanner handler for Inventory Page
+  const handleBarcodeScan = async (code: string) => {
+    const clean = code.trim()
+    const found = productos.find(p => p.codigo_barras === clean)
+    if (found) {
+      setSearch(clean)
+      toast(`🔍 Producto encontrado: ${found.nombre}`, { type: 'success' })
+    } else {
+      setNewProdSku(clean)
+      setShowAddModal(true)
+      toast(`Código ${clean} escaneado. Consultando catálogo maestro...`, { type: 'success' })
+      try {
+        const result = await smartLookupBarcode(clean)
+        if (result) {
+          setNewProdName(result.name)
+          setNewProdCategory(result.category)
+          setNewProdIva(String(result.default_iva))
+          toast('🟢 Producto identificado automáticamente', { type: 'success' })
+          setTimeout(() => {
+            const costEl = document.getElementById('new-prod-cost')
+            if (costEl) (costEl as HTMLInputElement).focus()
+          }, 200)
+        }
+      } catch (err) {
+        console.warn('Smart lookup failed:', err)
+      }
+    }
+  }
+
+  // 1. Hardware Barcode Scanner (Pistola USB / Bluetooth)
+  useBarcodeScanner({
+    onScan: handleBarcodeScan,
+    enabled: !showAddModal && !adjustProduct
+  })
+
+  // 2. Mobile Scanner Sync
+  useRemoteScanner(profile?.negocio_id, profile?.id, async (code, mode) => {
+    if (mode === 'form') {
+      handleBarcodeScan(code)
+    }
+  })
+
 
   // Granel configuration
   const [habilitarGranel, setHabilitarGranel] = useState(() => {

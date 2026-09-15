@@ -46,10 +46,8 @@ export default function LoginPage() {
           return
         }
         await signUp(email, password, nombre, businessName, direccion)
-        try {
-          await adminService.registerNewStore(businessName, nombre, email, '', 'Cereté')
-        } catch (_) {}
       } else {
+
         const result = loginSchema.safeParse({ email, password })
         if (!result.success) {
           const errors: Record<string, string> = {}
