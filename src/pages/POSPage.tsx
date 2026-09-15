@@ -461,11 +461,16 @@ export default function POSPage() {
           setIsGranelModalOpen(false)
           setSelectedGranelProd(null)
         }}
-        onAddToCart={(prod, qty) => {
-          addToCart(prod, qty)
-          toast(`Añadido: ${qty.toFixed(3)} ${prod.unidad_medida || 'kg'} de ${prod.nombre}`, { type: 'success' })
+        onAddToCart={(prod, qty, allowOverstock) => {
+          addToCart(prod, qty, allowOverstock)
+          if (allowOverstock) {
+            toast(`Añadido con sobreventa autorizada: ${qty.toFixed(3)} ${prod.unidad_medida || 'kg'} de ${prod.nombre}`, { type: 'warning' })
+          } else {
+            toast(`Añadido: ${qty.toFixed(3)} ${prod.unidad_medida || 'kg'} de ${prod.nombre}`, { type: 'success' })
+          }
         }}
       />
     </MainLayout>
+
   )
 }

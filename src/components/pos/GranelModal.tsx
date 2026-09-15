@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Producto } from '../../types'
 import { formatCOP } from '../../lib/utils'
-import { X, Scale, DollarSign, Check, Plus } from 'lucide-react'
+import { X, Scale, DollarSign, Check, AlertTriangle, RefreshCw } from 'lucide-react'
 
 interface GranelModalProps {
   isOpen: boolean
   producto: Producto | null
   onClose: () => void
-  onAddToCart: (producto: Producto, cantidad: number) => void
+  onAddToCart: (producto: Producto, cantidad: number, allowOverstock?: boolean) => void
 }
 
 export default function GranelModal({
@@ -19,10 +19,12 @@ export default function GranelModal({
   const [mode, setMode] = useState<'dinero' | 'peso'>('dinero')
   const [dineroInput, setDineroInput] = useState('')
   const [pesoInput, setPesoInput] = useState('')
+  const [allowOverstock, setAllowOverstock] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const unit = producto?.unidad_medida || 'kg'
   const precioUnitario = producto?.precio_venta || 0
+  const stockDisponible = Math.max(0, producto?.stock_actual || 0)
 
   // Focus input and reset when product opens
   useEffect(() => {
@@ -30,6 +32,7 @@ export default function GranelModal({
       setMode('dinero')
       setDineroInput('')
       setPesoInput('')
+      setAllowOverstock(false)
       setTimeout(() => {
         inputRef.current?.focus()
       }, 50)
@@ -51,6 +54,9 @@ export default function GranelModal({
     }
   }, [mode, dineroInput, pesoInput, precioUnitario, producto])
 
+  // Check if requested quantity exceeds available inventory
+  const isOverStock = cantidadFinal > stockDisponible && cantidadFinal > 0
+
   if (!isOpen || !producto) return null
 
   const handleQuickMoney = (amount: number) => {
@@ -65,11 +71,28 @@ export default function GranelModal({
     setDineroInput(String(Math.round(weight * precioUnitario)))
   }
 
+  const handleAdjustToAvailableStock = () => {
+    const maxMoney = Math.round(stockDisponible * precioUnitario)
+    if (mode === 'dinero') {
+      setDineroInput(String(maxMoney))
+      setPesoInput(stockDisponible.toFixed(3))
+    } else {
+      setPesoInput(stockDisponible.toFixed(3))
+      setDineroInput(String(maxMoney))
+    }
+    setAllowOverstock(false)
+  }
+
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     if (cantidadFinal <= 0) return
 
-    onAddToCart(producto, cantidadFinal)
+    // If over-stock and not authorized, prevent accidental submission
+    if (isOverStock && !allowOverstock) {
+      return
+    }
+
+    onAddToCart(producto, cantidadFinal, allowOverstock)
     onClose()
   }
 
@@ -100,9 +123,18 @@ export default function GranelModal({
                   {unit}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium">
-                Precio base: <span className="font-bold text-slate-900">{formatCOP(precioUnitario)}</span> / {unit}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-[11px] text-slate-500 font-medium">
+                  Precio: <span className="font-bold text-slate-900">{formatCOP(precioUnitario)}</span>/{unit}
+                </p>
+                <span className="text-slate-300">·</span>
+                <p className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                  <span>Stock:</span>
+                  <span className={stockDisponible === 0 ? 'text-red-600 font-mono' : 'text-emerald-700 font-mono'}>
+                    {stockDisponible.toFixed(3)} {unit}
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
           <button
@@ -179,7 +211,10 @@ export default function GranelModal({
                       setDineroInput(num > 0 ? String(Math.round(num * precioUnitario)) : '')
                     }
                   }}
-                  className="w-full h-12 pl-4 pr-12 text-xl font-bold font-mono border-2 border-slate-300 rounded-xl focus:outline-none focus:border-slate-900 transition-colors bg-white"
+                  className={[
+                    'w-full h-12 pl-4 pr-12 text-xl font-bold font-mono border-2 rounded-xl focus:outline-none transition-colors bg-white',
+                    isOverStock ? 'border-amber-400 focus:border-amber-600 text-slate-900' : 'border-slate-300 focus:border-slate-900'
+                  ].join(' ')}
                 />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[12px] font-bold text-slate-400">
                   {mode === 'dinero' ? 'COP' : unit}
@@ -207,6 +242,45 @@ export default function GranelModal({
                 </p>
               </div>
             </div>
+
+            {/* OVER-STOCK ALERT & INTELLIGENT RESOLUTION BOX */}
+            {isOverStock && (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-2.5 animate-in fade-in duration-150">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div className="text-[12px] text-amber-900 leading-snug">
+                    <p className="font-bold">⚠️ Stock insuficiente en sistema</p>
+                    <p className="mt-0.5 text-amber-800">
+                      Pides <span className="font-bold font-mono">{cantidadFinal.toFixed(3)} {unit}</span> ({formatCOP(totalFinal)}), pero solo hay <span className="font-bold font-mono">{stockDisponible.toFixed(3)} {unit}</span> ({formatCOP(stockDisponible * precioUnitario)}) en inventario.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-amber-200/60">
+                  <button
+                    type="button"
+                    onClick={handleAdjustToAvailableStock}
+                    className="flex-1 py-2 px-2.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <RefreshCw size={12} />
+                    <span>Ajustar a {stockDisponible.toFixed(3)} {unit} ({formatCOP(stockDisponible * precioUnitario)})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAllowOverstock(!allowOverstock)}
+                    className={[
+                      'py-2 px-2.5 border text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer',
+                      allowOverstock
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-amber-300 hover:bg-amber-100/60'
+                    ].join(' ')}
+                  >
+                    <span>{allowOverstock ? '✓ Sobreventa Permitida' : 'Vender faltante de todos modos'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Quick 1-Click Buttons */}
             <div>
@@ -236,28 +310,28 @@ export default function GranelModal({
                         onClick={() => handleQuickWeight(0.25)}
                         className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
                       >
-                        1/4 kg (250g)
+                        1/4 kg
                       </button>
                       <button
                         type="button"
                         onClick={() => handleQuickWeight(0.5)}
                         className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
                       >
-                        1/2 kg (500g)
+                        1/2 kg
                       </button>
                       <button
                         type="button"
                         onClick={() => handleQuickWeight(1)}
                         className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
                       >
-                        1 Kilo (1kg)
+                        1 Kilo
                       </button>
                       <button
                         type="button"
                         onClick={() => handleQuickWeight(2)}
                         className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold rounded-lg transition-colors cursor-pointer"
                       >
-                        2 Kilos (2kg)
+                        2 Kilos
                       </button>
                     </>
                   )}
@@ -341,11 +415,25 @@ export default function GranelModal({
 
               <button
                 type="submit"
-                disabled={cantidadFinal <= 0}
-                className="flex-2 h-11 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-[13px] font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                disabled={cantidadFinal <= 0 || (isOverStock && !allowOverstock)}
+                className={[
+                  'flex-2 h-11 text-white text-[13px] font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer',
+                  (isOverStock && !allowOverstock)
+                    ? 'bg-amber-500 hover:bg-amber-600 opacity-90'
+                    : 'bg-slate-900 hover:bg-slate-800 disabled:opacity-40'
+                ].join(' ')}
               >
-                <Check size={16} />
-                <span>Agregar {formatCOP(totalFinal)}</span>
+                {isOverStock && !allowOverstock ? (
+                  <>
+                    <AlertTriangle size={15} />
+                    <span>Ajusta stock o autoriza</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    <span>Agregar {formatCOP(totalFinal)} ({cantidadFinal.toFixed(2)} {unit})</span>
+                  </>
+                )}
               </button>
             </div>
           </form>
@@ -355,3 +443,4 @@ export default function GranelModal({
     </div>
   )
 }
+

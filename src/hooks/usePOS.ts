@@ -44,20 +44,24 @@ export function usePOS() {
     saveCartToStorage(cart)
   }, [cart])
 
-  const addToCart = useCallback((producto: Producto, quantity: number = 1) => {
+  const addToCart = useCallback((producto: Producto, quantity: number = 1, allowOverstock: boolean = false) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.producto.id === producto.id)
+      const currentQty = existing ? existing.cantidad : 0
+      const targetQty = currentQty + quantity
+      const finalQty = allowOverstock ? targetQty : Math.min(Math.max(0, producto.stock_actual), targetQty)
+
       if (existing) {
-        const nextQty = Math.min(producto.stock_actual, existing.cantidad + quantity)
         return prev.map((item) =>
           item.producto.id === producto.id
-            ? { ...item, cantidad: nextQty }
+            ? { ...item, cantidad: finalQty }
             : item
         )
       }
-      return [...prev, { producto, cantidad: Math.min(producto.stock_actual, quantity) }]
+      return [...prev, { producto, cantidad: finalQty }]
     })
   }, [])
+
 
   const updateQty = useCallback((productoId: string, amount: number) => {
     setCart((prev) => {
