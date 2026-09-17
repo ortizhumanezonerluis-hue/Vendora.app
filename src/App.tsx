@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { isElectron } from './lib/electronBridge'
 import { AuthProvider } from './components/auth/AuthContext'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
@@ -28,9 +29,11 @@ import { Toaster } from './components/ui/Toaster'
 import SyncModal from './components/offline/SyncModal'
 
 export default function App() {
+  const Router = isElectron ? HashRouter : BrowserRouter
+
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <Router>
         <SyncModal />
         <Routes>
           {/* Public Landing Page */}
@@ -233,7 +236,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/pos" replace />} />
         </Routes>
         <Toaster />
-      </BrowserRouter>
+      </Router>
     </AuthProvider>
   )
 }
