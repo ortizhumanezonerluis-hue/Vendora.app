@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "build:electron": "tsc -p tsconfig.electron.json && vite build",
+    "build:electron": "node scripts/build-electron.js",
     "electron": "electron .",
-    "start": "tsc -p tsconfig.electron.json && vite build && electron .",
+    "start": "node scripts/build-electron.js && electron .",
     "preview": "vite preview",
     "format": "oxfmt"
   },
