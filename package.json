@@ -7,6 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "build:electron": "tsc -p tsconfig.electron.json && vite build",
+    "electron": "electron .",
+    "start": "tsc -p tsconfig.electron.json && vite build && electron .",
     "preview": "vite preview",
     "format": "oxfmt"
   },
