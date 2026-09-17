@@ -25,6 +25,7 @@ import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminPage from './pages/admin/AdminPage'
 import AdminRoute from './components/auth/AdminRoute'
 import BackupRestorePage from './pages/BackupRestorePage'
+import DesktopWelcomeModal from './components/desktop/DesktopWelcomeModal'
 import { Toaster } from './components/ui/Toaster'
 import SyncModal from './components/offline/SyncModal'
 
@@ -35,9 +36,10 @@ export default function App() {
     <AuthProvider>
       <Router>
         <SyncModal />
+        <DesktopWelcomeModal />
         <Routes>
-          {/* Public Landing Page */}
-          <Route path="/" element={<LandingPage />} />
+          {/* Public Landing Page in Web, direct to App/Login in Electron */}
+          <Route path="/" element={isElectron ? <Navigate to="/pos" replace /> : <LandingPage />} />
           
           <Route path="/login" element={<LoginPage />} />
           <Route

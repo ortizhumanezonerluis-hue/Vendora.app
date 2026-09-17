@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient'
+import { desktopDB, isElectron } from '../lib/electronBridge'
 
 export interface Proveedor {
   id: string
@@ -29,6 +30,9 @@ export interface OrdenCompra {
 export const reorderService = {
   // --- Suppliers CRUD ---
   async getProveedores(negocioId?: string | null): Promise<Proveedor[]> {
+    if (isElectron && desktopDB) {
+      return (await desktopDB.getProveedores()) as Proveedor[]
+    }
     let query = supabase.from('proveedores').select('*').order('nombre', { ascending: true })
     if (negocioId) query = query.eq('negocio_id', negocioId)
     const { data, error } = await query
@@ -37,6 +41,9 @@ export const reorderService = {
   },
 
   async saveProveedor(proveedor: Omit<Proveedor, 'id'> & { id?: string }, negocioId?: string | null): Promise<Proveedor> {
+    if (isElectron && desktopDB) {
+      return (await desktopDB.saveProveedor({ ...proveedor, negocio_id: negocioId })) as Proveedor
+    }
     const { id, ...rest } = proveedor as any
     const payload = { ...rest, negocio_id: negocioId }
     let query
@@ -51,6 +58,10 @@ export const reorderService = {
   },
 
   async deleteProveedor(id: string): Promise<void> {
+    if (isElectron && desktopDB) {
+      await desktopDB.deleteProveedor(id)
+      return
+    }
     const { error } = await supabase.from('proveedores').delete().eq('id', id)
     if (error) throw error
   },

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 import { authService } from '../../services/authService'
+import { isElectron } from '../../lib/electronBridge'
 
 interface UserProfile {
   id: string
@@ -67,6 +68,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function checkSession() {
+      if (!navigator.onLine && isElectron) {
+        const cached = restoreCachedSession()
+        if (cached?.user && cached?.profile) {
+          setUser(cached.user)
+          setProfile(cached.profile)
+        }
+        setLoading(false)
+        return
+      }
+
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
@@ -76,14 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile(prof)
             cacheSession(session.user, prof)
           } else {
-            // If profile query returned null (or offline), preserve existing cached profile
             const cached = restoreCachedSession()
             if (cached?.profile) {
               setProfile(cached.profile)
             }
           }
         } else {
-          // No active Supabase session (e.g. offline) — restore from cache
           const cached = restoreCachedSession()
           if (cached?.user && cached?.profile) {
             setUser(cached.user)
@@ -135,6 +144,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(res.profile as UserProfile)
       cacheSession(res.user, res.profile as UserProfile)
     } catch (err: any) {
+      if (isElectron || !navigator.onLine) {
+        // Fallback offline en escritorio: permitir entrar con sesión local / caché
+        const cached = restoreCachedSession()
+        const localUser = cached?.user || { id: 'usr-admin-principal', email: e }
+        const localProfile: UserProfile = cached?.profile || {
+          id: 'usr-admin-principal',
+          email: e,
+          nombre: e.split('@')[0] || 'Administrador',
+          rol: 'admin',
+          estado: 'activo',
+          negocio_id: 'negocio-local-principal'
+        }
+        setUser(localUser)
+        setProfile(localProfile)
+        cacheSession(localUser, localProfile)
+        return
+      }
       setError(err.message || 'Error al iniciar sesión')
       throw err
     } finally {

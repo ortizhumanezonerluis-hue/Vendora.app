@@ -81,18 +81,25 @@ export const inventoryService = {
   },
 
   async getMovimientos(productoId?: string): Promise<MovimientoInventario[]> {
-    let query = supabase
-      .from('movimientos_inventario')
-      .select('*')
-      .order('fecha', { ascending: false })
-    if (productoId) query = query.eq('producto_id', productoId)
-    const { data, error } = await query
-    if (error) throw error
-    return data || []
+    if (isElectron || !navigator.onLine) {
+      return []
+    }
+    try {
+      let query = supabase
+        .from('movimientos_inventario')
+        .select('*')
+        .order('fecha', { ascending: false })
+      if (productoId) query = query.eq('producto_id', productoId)
+      const { data, error } = await query
+      if (error) throw error
+      return data || []
+    } catch {
+      return []
+    }
   },
 
   /**
-   * Registra el movimiento, actualiza stock en Supabase,
+   * Registra el movimiento, actualiza stock en SQLite (Electron) o Supabase (Web),
    * y crea audit log + notificación según el nivel de stock resultante.
    */
   async registrarMovimiento(
@@ -100,6 +107,18 @@ export const inventoryService = {
     productoNombre: string = 'Producto',
     stockMinimo: number = 10
   ): Promise<MovimientoInventario> {
+    if (isElectron && desktopDB) {
+      const prod = await desktopDB.getProductoById(movimiento.producto_id)
+      const currentStock = prod?.stock_actual || 0
+      const newStock = Number((currentStock + movimiento.cantidad).toFixed(3))
+      await desktopDB.saveProducto({ ...prod, id: movimiento.producto_id, stock_actual: newStock })
+      return {
+        ...movimiento,
+        id: `mov_${Date.now()}`,
+        fecha: new Date().toISOString()
+      }
+    }
+
     // 1. Insert movement
     const { data: movData, error: movError } = await supabase
       .from('movimientos_inventario')

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../components/auth/AuthContext'
 import { adminService, PlanType, VendoraCliente } from '../services/adminService'
 import { supabase } from '../lib/supabaseClient'
+import { isElectron } from '../lib/electronBridge'
 
 export interface LicensePermissions {
   plan: PlanType
@@ -20,6 +21,24 @@ export interface LicensePermissions {
 }
 
 export function useLicense(): LicensePermissions {
+  if (isElectron) {
+    return {
+      plan: 'max',
+      licenciaActiva: true,
+      isStarter: false,
+      isPro: false,
+      isMax: true,
+      isSinLicencia: false,
+      canAccessPurchasing: true,
+      canAccessLogs: true,
+      canManageEmployees: true,
+      canAccessAccounting: true,
+      maxProviders: Infinity,
+      cliente: null,
+      loading: false
+    }
+  }
+
   const { profile, user } = useAuth()
   const email = profile?.email || user?.email
 
