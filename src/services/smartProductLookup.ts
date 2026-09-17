@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient'
 import { normalizeCategory, calculateDIANTax, isAlreadyCanonical } from '../utils/productHelpers'
+import { desktopDB, isElectron } from '../lib/electronBridge'
 
 export interface SmartProduct {
   barcode: string
@@ -8,12 +9,12 @@ export interface SmartProduct {
   category: string
   default_iva: number
   image_url?: string
-  source: 'master_catalog' | 'open_food_facts' | 'edge_scraper' | 'none'
+  source: 'master_catalog' | 'open_food_facts' | 'edge_scraper' | 'offline_seed' | 'none'
 }
 
 /**
  * 3-tier cascaded product lookup engine.
- * Capa 1: Local Red Maestra (master_catalog table in Supabase)
+ * Capa 1: Local Red Maestra (SQLite local en Electron / Supabase en Web)
  * Capa 2: Open Food Facts API (with background indexation to master_catalog)
  * Capa 3: Supabase Edge Scraper for Exito/Carulla (with background indexation)
  */
@@ -21,7 +22,28 @@ export async function smartLookupBarcode(barcode: string): Promise<SmartProduct 
   const cleanBarcode = barcode.trim()
   if (!cleanBarcode) return null
 
-  // --- CAPA 1: master_catalog (Supabase) ---
+  // --- CAPA 1A: Catálogo Maestro Offline en SQLite (Electron) ---
+  if (isElectron && desktopDB) {
+    try {
+      const offlineMatch = await desktopDB.smartLookupBarcodeOffline(cleanBarcode)
+      if (offlineMatch) {
+        console.log(`[smartLookup] SQLite Offline Match! (${cleanBarcode})`)
+        return {
+          barcode: offlineMatch.barcode,
+          name: offlineMatch.name,
+          brand: offlineMatch.brand || '',
+          category: offlineMatch.category,
+          default_iva: Number(offlineMatch.default_iva) || 19,
+          image_url: offlineMatch.image_url,
+          source: 'offline_seed'
+        }
+      }
+    } catch (err) {
+      console.warn('[smartLookup] Error consultando catálogo SQLite offline:', err)
+    }
+  }
+
+  // --- CAPA 1B: master_catalog (Supabase Web) ---
   try {
     const { data: dbItem, error: dbError } = await supabase
       .from('master_catalog')
@@ -36,7 +58,6 @@ export async function smartLookupBarcode(barcode: string): Promise<SmartProduct 
         name: dbItem.name,
         brand: dbItem.brand,
         // Category is already stored normalized in master_catalog — don't re-normalize
-        // Re-normalizing causes 'Abarrotes' → 'Bebidas' due to 'te' substring bug
         category: isAlreadyCanonical(dbItem.category) ?? normalizeCategory(dbItem.category),
         default_iva: Number.isFinite(parseFloat(dbItem.default_iva)) ? parseFloat(dbItem.default_iva) : calculateDIANTax(dbItem.name, dbItem.category),
         image_url: dbItem.image_url,

@@ -23,6 +23,7 @@ import LandingPage from './pages/LandingPage'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminPage from './pages/admin/AdminPage'
 import AdminRoute from './components/auth/AdminRoute'
+import BackupRestorePage from './pages/BackupRestorePage'
 import { Toaster } from './components/ui/Toaster'
 import SyncModal from './components/offline/SyncModal'
 
@@ -138,6 +139,14 @@ export default function App() {
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/respaldo"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <BackupRestorePage />
               </ProtectedRoute>
             }
           />

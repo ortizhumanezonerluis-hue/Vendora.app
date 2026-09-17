@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient'
+import { desktopDB, isElectron } from '../lib/electronBridge'
 
 export interface SesionAuditoria {
   id?: string
@@ -58,6 +59,9 @@ const saveLocalDetails = (sesionId: string, details: DetalleSesionAuditoria[]) =
 
 export const auditSessionService = {
   async getSessions(negocioId: string): Promise<SesionAuditoria[]> {
+    if (isElectron && desktopDB) {
+      return (await desktopDB.getSesionesAuditoria()) as SesionAuditoria[]
+    }
     try {
       const { data, error } = await supabase
         .from('sesiones_auditoria')
@@ -91,6 +95,9 @@ export const auditSessionService = {
   },
 
   async getSessionDetails(sesionId: string): Promise<DetalleSesionAuditoria[]> {
+    if (isElectron && desktopDB) {
+      return (await desktopDB.getDetallesAuditoria(sesionId)) as any[]
+    }
     try {
       const { data, error } = await supabase
         .from('detalles_sesion_auditoria')
@@ -106,6 +113,9 @@ export const auditSessionService = {
   },
 
   async createSession(session: Omit<SesionAuditoria, 'id' | 'items_count' | 'diferencia_total'>): Promise<SesionAuditoria> {
+    if (isElectron && desktopDB) {
+      return (await desktopDB.createSesionAuditoria(session)) as SesionAuditoria
+    }
     const payload = {
       ...session,
       estado: 'en_proceso' as const,
@@ -138,6 +148,10 @@ export const auditSessionService = {
     sesionId: string,
     items: { producto_id: string; stock_sistema: number; cantidad_contada: number; costo_unitario: number; producto_nombre?: string; sku?: string }[]
   ): Promise<void> {
+    if (isElectron && desktopDB) {
+      await desktopDB.saveDetallesAuditoria(sesionId, items)
+      return
+    }
     const details: DetalleSesionAuditoria[] = items.map(it => {
       const diff = it.cantidad_contada - it.stock_sistema
       const financialImpact = diff * it.costo_unitario

@@ -25,7 +25,8 @@ import {
   Landmark,
   Coins,
   Lock,
-  Activity
+  Activity,
+  HardDrive
 } from 'lucide-react'
 
 // Main App Navigation Items
@@ -41,6 +42,7 @@ const mainNav = [
   { to: '/reportes', icon: BarChart3, label: 'Informes', adminOnly: true, requiredPlan: 'starter' },
   { to: '/contabilidad/libro-fiscal', icon: Scale, label: 'Contabilidad', adminOnly: true, requiredPlan: 'max' },
   { to: '/auditoria-logs', icon: Activity, label: 'Logs del Sistema', adminOnly: true, requiredPlan: 'pro' },
+  { to: '/respaldo', icon: HardDrive, label: 'Respaldos Locales', adminOnly: true, requiredPlan: 'starter' },
 ]
 
 

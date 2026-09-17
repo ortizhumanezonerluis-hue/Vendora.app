@@ -1,12 +1,65 @@
 import { supabase } from '../lib/supabaseClient'
 import { Venta, DetalleVenta, Producto } from '../types'
 import { auditService } from './auditService'
+import { desktopDB, isElectron } from '../lib/electronBridge'
 
 export const posService = {
   async processSale(
     saleData: Omit<Venta, 'id' | 'fecha'> & { negocio_id?: string | null },
     items: { product: Producto; qty: number }[]
   ): Promise<Venta> {
+    if (isElectron && desktopDB) {
+      let totalTax = 0
+      let totalSubtotal = 0
+
+      const detallesPayload = items.map((item) => {
+        const itemSubtotal = item.product.precio_venta * item.qty
+        const itemIvaPercent = (item.product as any).porcentaje_iva ?? (item.product as any).iva_porcentaje ?? 19.00
+        const itemTax = itemSubtotal * (itemIvaPercent / 100)
+
+        totalSubtotal += itemSubtotal
+        totalTax += itemTax
+
+        return {
+          producto_id: item.product.id,
+          producto_nombre: item.product.nombre,
+          cantidad: item.qty,
+          precio_unitario: item.product.precio_venta,
+          subtotal: itemSubtotal,
+          iva_porcentaje: itemIvaPercent,
+          iva_monto: itemTax,
+          unidad_medida: item.product.unidad_medida || 'UND'
+        }
+      })
+
+      const finalTotal = totalSubtotal + totalTax
+
+      const ventaPayload = {
+        negocio_id: saleData.negocio_id,
+        usuario_id: saleData.usuario_id || (saleData as any).cajero || 'usr-admin-principal',
+        total: finalTotal,
+        subtotal: totalSubtotal,
+        iva_total: totalTax,
+        metodo_pago: saleData.metodo_pago || 'efectivo',
+        monto_recibido: (saleData as any).monto_recibido || finalTotal,
+        cambio: (saleData as any).cambio || 0
+      }
+
+      const result = await desktopDB.registrarVenta({
+        venta: ventaPayload,
+        detalles: detallesPayload
+      })
+
+      return {
+        id: result.id,
+        fecha: new Date().toISOString(),
+        usuario_id: ventaPayload.usuario_id,
+        total: finalTotal,
+        metodo_pago: saleData.metodo_pago,
+        estado: 'completada'
+      }
+    }
+
     // Calculate total, subtotal, and tax based on individual products custom IVA
     let totalTax = 0
     let totalSubtotal = 0
@@ -189,6 +242,9 @@ export const posService = {
   },
 
   async getTodaySales(): Promise<any[]> {
+    if (isElectron && desktopDB) {
+      return (await desktopDB.getVentas(100)) as any[]
+    }
     const today = new Date().toISOString().split('T')[0]
     const { data, error } = await supabase
       .from('ventas')

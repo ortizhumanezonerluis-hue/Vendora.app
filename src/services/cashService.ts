@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient'
 import { ArqueoCaja } from '../types'
 import { auditService } from './auditService'
+import { desktopDB, isElectron } from '../lib/electronBridge'
 
 export const cashService = {
   /**
@@ -8,6 +9,10 @@ export const cashService = {
    * If the active session is from a PREVIOUS day, auto-closes it.
    */
   async getActiveSession(usuarioId: string, negocioId?: string | null): Promise<ArqueoCaja | null> {
+    if (isElectron && desktopDB) {
+      return (await desktopDB.getArqueoActivo(negocioId ?? undefined)) as ArqueoCaja | null
+    }
+
     let query = supabase
       .from('arqueos_caja')
       .select('*')

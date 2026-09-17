@@ -1,9 +1,13 @@
 import { supabase } from '../lib/supabaseClient'
 import { Producto, MovimientoInventario } from '../types'
 import { auditService } from './auditService'
+import { desktopDB, isElectron } from '../lib/electronBridge'
 
 export const inventoryService = {
   async getProductos(negocioId?: string | null): Promise<Producto[]> {
+    if (isElectron && desktopDB) {
+      return (await desktopDB.getProductos(negocioId ?? undefined)) as Producto[]
+    }
     let query = supabase.from('productos').select('*').order('nombre', { ascending: true })
     if (negocioId) query = query.eq('negocio_id', negocioId)
     const { data, error } = await query
@@ -12,6 +16,9 @@ export const inventoryService = {
   },
 
   async getProductoById(id: string): Promise<Producto | null> {
+    if (isElectron && desktopDB) {
+      return (await desktopDB.getProductoById(id)) as Producto | null
+    }
     const { data, error } = await supabase
       .from('productos')
       .select('*')
@@ -22,6 +29,10 @@ export const inventoryService = {
   },
 
   async createProducto(producto: Omit<Producto, 'id'>, usuario: string = 'Sistema', negocioId?: string | null): Promise<Producto> {
+    if (isElectron && desktopDB) {
+      const saved = await desktopDB.saveProducto({ ...producto, negocio_id: negocioId })
+      return saved as Producto
+    }
     const insertData = negocioId ? { ...producto, negocio_id: negocioId } : producto
     const { data, error } = await supabase
       .from('productos')
@@ -43,6 +54,10 @@ export const inventoryService = {
   },
 
   async updateProducto(id: string, updates: Partial<Producto>): Promise<Producto> {
+    if (isElectron && desktopDB) {
+      const saved = await desktopDB.saveProducto({ id, ...updates })
+      return saved as Producto
+    }
     const { data, error } = await supabase
       .from('productos')
       .update(updates)
@@ -54,6 +69,10 @@ export const inventoryService = {
   },
 
   async deleteProducto(id: string): Promise<void> {
+    if (isElectron && desktopDB) {
+      await desktopDB.deleteProducto(id)
+      return
+    }
     const { error } = await supabase
       .from('productos')
       .delete()
