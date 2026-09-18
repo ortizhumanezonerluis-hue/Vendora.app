@@ -4,7 +4,7 @@ export function triggerDirectDownload() {
   toast('🚀 Iniciando descarga de Vendora POS para Windows (.exe)...', { type: 'success' })
 
   // Direct download link from GitHub Releases
-  const releaseUrl = 'https://github.com/ortizhumanezonerluis-hue/Vendora.app/releases/download/v1.0.0/Vendora.POS.Setup.1.0.0.exe'
+  const releaseUrl = 'https://github.com/ortizhumanezonerluis-hue/Vendora.app/releases/download/v1.0.0/Vendora-POS-Setup.exe'
 
   const link = document.createElement('a')
   link.href = releaseUrl
