@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabaseClient'
 import { normalizeCategory, calculateDIANTax, isAlreadyCanonical } from '../utils/productHelpers'
-import { desktopDB, isElectron } from '../lib/electronBridge'
+import { offlineDb } from '../lib/offlineDb'
 
 export interface SmartProduct {
   barcode: string
@@ -14,7 +14,7 @@ export interface SmartProduct {
 
 /**
  * 3-tier cascaded product lookup engine.
- * Capa 1: Local Red Maestra (SQLite local en Electron / Supabase en Web)
+ * Capa 1: Local cache / Supabase master_catalog
  * Capa 2: Open Food Facts API (with background indexation to master_catalog)
  * Capa 3: Supabase Edge Scraper for Exito/Carulla (with background indexation)
  */
@@ -22,59 +22,58 @@ export async function smartLookupBarcode(barcode: string): Promise<SmartProduct 
   const cleanBarcode = barcode.trim()
   if (!cleanBarcode) return null
 
-  // --- CAPA 1A: Catálogo Maestro Offline en SQLite (Electron) ---
-  if (isElectron && desktopDB) {
+  // --- CAPA 0: Cache Local de Productos ---
+  try {
+    const cached = await offlineDb.getCachedProducts()
+    const cachedMatch = cached.find(p => p.codigo_barras?.trim() === cleanBarcode)
+    if (cachedMatch) {
+      return {
+        barcode: cachedMatch.codigo_barras || cleanBarcode,
+        name: cachedMatch.nombre,
+        brand: '',
+        category: cachedMatch.categoria || 'General',
+        default_iva: cachedMatch.impuesto ?? 19,
+        image_url: cachedMatch.imagen_url,
+        source: 'offline_seed'
+      }
+    }
+  } catch (_) {}
+
+  // --- CAPA 1: master_catalog (Supabase) ---
+  if (navigator.onLine) {
     try {
-      const offlineMatch = await desktopDB.smartLookupBarcodeOffline(cleanBarcode)
-      if (offlineMatch) {
-        console.log(`[smartLookup] SQLite Offline Match! (${cleanBarcode})`)
+      const { data: dbItem, error: dbError } = await supabase
+        .from('master_catalog')
+        .select('*')
+        .eq('barcode', cleanBarcode)
+        .maybeSingle()
+
+      if (dbItem && !dbError) {
+        console.log(`[smartLookup] Capa 1 Match! (${cleanBarcode})`)
         return {
-          barcode: offlineMatch.barcode,
-          name: offlineMatch.name,
-          brand: offlineMatch.brand || '',
-          category: offlineMatch.category,
-          default_iva: Number(offlineMatch.default_iva) || 19,
-          image_url: offlineMatch.image_url,
-          source: 'offline_seed'
+          barcode: dbItem.barcode,
+          name: dbItem.name,
+          brand: dbItem.brand,
+          category: isAlreadyCanonical(dbItem.category) ?? normalizeCategory(dbItem.category),
+          default_iva: Number.isFinite(parseFloat(dbItem.default_iva)) ? parseFloat(dbItem.default_iva) : calculateDIANTax(dbItem.name, dbItem.category),
+          image_url: dbItem.image_url,
+          source: 'master_catalog'
         }
       }
     } catch (err) {
-      console.warn('[smartLookup] Error consultando catálogo SQLite offline:', err)
+      console.warn('[smartLookup] Error en consulta Capa 1:', err)
     }
   }
 
-  // --- CAPA 1B: master_catalog (Supabase Web) ---
-  try {
-    const { data: dbItem, error: dbError } = await supabase
-      .from('master_catalog')
-      .select('*')
-      .eq('barcode', cleanBarcode)
-      .maybeSingle()
+  // --- CAPA 2: Open Food Facts API (Online only) ---
+  if (!navigator.onLine) return null
 
-    if (dbItem && !dbError) {
-      console.log(`[smartLookup] Capa 1 Match! (${cleanBarcode})`)
-      return {
-        barcode: dbItem.barcode,
-        name: dbItem.name,
-        brand: dbItem.brand,
-        // Category is already stored normalized in master_catalog — don't re-normalize
-        category: isAlreadyCanonical(dbItem.category) ?? normalizeCategory(dbItem.category),
-        default_iva: Number.isFinite(parseFloat(dbItem.default_iva)) ? parseFloat(dbItem.default_iva) : calculateDIANTax(dbItem.name, dbItem.category),
-        image_url: dbItem.image_url,
-        source: 'master_catalog'
-      }
-    }
-  } catch (err) {
-    console.warn('[smartLookup] Error en consulta Capa 1:', err)
-  }
-
-  // --- CAPA 2: Open Food Facts API ---
   try {
     console.log(`[smartLookup] Capa 2 Querying Open Food Facts for (${cleanBarcode})...`)
-    const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${cleanBarcode}.json`)
-    if (response.ok) {
-      const data = await response.json()
-      if (data.status === 1 && data.product) {
+    const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${cleanBarcode}.json`).catch(() => null)
+    if (response && response.ok) {
+      const data = await response.json().catch(() => null)
+      if (data && data.status === 1 && data.product) {
         const prod = data.product
         const name = prod.product_name || prod.product_name_es || prod.product_name_en || 'Producto Nuevo'
         const brand = prod.brands || ''
@@ -102,16 +101,10 @@ export async function smartLookupBarcode(barcode: string): Promise<SmartProduct 
     console.warn('[smartLookup] Error en consulta Capa 2:', err)
   }
 
-  // --- CAPA 3: Supabase Edge Scraper o Scraping Directo Cliente ---
+  // --- CAPA 3: Supabase Edge Scraper (Online only) ---
   try {
-    console.log(`[smartLookup] Capa 3 Querying Edge Scraper for (${cleanBarcode})...`)
-    
     let scraperResult = null
-
     try {
-      // LLAMADA EXCLUSIVA A TRAVÉS DEL PROXY DE SUPABASE (EDGE FUNCTION)
-      // Esto evita los bloqueos CORS porque la petición se realiza de servidor a servidor (Deno -> Exito/Carulla)
-      // y la Edge Function devuelve las cabeceras CORS correctas al navegador.
       const { data: pathData, error: pathError } = await supabase.functions.invoke(`scrape-product?barcode=${cleanBarcode}`, {
         method: 'GET'
       })
@@ -155,6 +148,7 @@ export async function smartLookupBarcode(barcode: string): Promise<SmartProduct 
  * Saves a discovered product into the master_catalog table asynchronously
  */
 export async function indexProductBackground(prod: Omit<SmartProduct, 'source'>) {
+  if (!navigator.onLine) return
   try {
     const payload = {
       barcode: prod.barcode,

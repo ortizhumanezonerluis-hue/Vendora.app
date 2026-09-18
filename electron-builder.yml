@@ -1,0 +1,36 @@
+appId: com.vendora.pos
+productName: Vendora POS
+copyright: Copyright © 2025 Vendora
+
+# Directorios de artefactos
+directories:
+  output: release
+  buildResources: build-resources
+
+# Archivos a incluir en el paquete Electron
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+
+# Configuración Windows — NSIS installer
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Vendora POS
+  deleteAppDataOnUninstall: false
+
+# Publicación en GitHub Releases
+publish:
+  provider: github
+  owner: ortizhumanezonerluis-hue
+  repo: Vendora.app
+  releaseType: release

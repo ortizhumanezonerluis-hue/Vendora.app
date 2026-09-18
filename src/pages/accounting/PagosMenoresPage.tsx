@@ -7,8 +7,10 @@ import { toast } from '../../components/ui/Toaster'
 import { SkeletonPage } from '../../components/ui/Skeleton'
 import {
   Coins, Plus, Search, Trash2, X, Save,
-  FileText, Tag, Receipt, Truck, Wrench, Sparkles, ShoppingBag, MoreHorizontal
+  FileText, Tag, Receipt, Truck, Wrench, Sparkles, ShoppingBag, MoreHorizontal,
+  Printer, Download, Eye
 } from 'lucide-react'
+import { printHtmlDocument, downloadHtmlDocument } from '../../lib/printHelper'
 
 type CategoriaType = 'todas' | 'Acarreos' | 'Servicios' | 'Mantenimiento' | 'Aseo' | 'Suministros' | 'Otros'
 
@@ -18,6 +20,9 @@ export default function PagosMenoresPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState<CategoriaType>('todas')
+
+  // Selected receipt for preview/printing
+  const [selectedReceipt, setSelectedReceipt] = useState<PagoMenor | null>(null)
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false)
@@ -91,6 +96,217 @@ export default function PagosMenoresPage() {
     } catch (err: any) {
       toast(err.message || 'Error al eliminar', { type: 'error' })
     }
+  }
+
+  const getReceiptHtml = (item: PagoMenor): string => {
+    const dateStr = item.fecha ? new Date(item.fecha).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }) : '—'
+    const code = (item.id || '').slice(0, 8).toUpperCase()
+    return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Comprobante de Pago Menor #${code}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      color: #111827;
+      background: #ffffff;
+      padding: 24px;
+    }
+    .voucher-card {
+      max-width: 580px;
+      margin: 0 auto;
+      border: 2px solid #1f2937;
+      border-radius: 8px;
+      padding: 24px;
+    }
+    .header {
+      border-bottom: 2px dashed #9ca3af;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 16px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #111827;
+    }
+    .header h2 {
+      font-size: 12px;
+      font-weight: 600;
+      color: #4b5563;
+      margin-top: 4px;
+      text-transform: uppercase;
+    }
+    .badge {
+      display: inline-block;
+      margin-top: 8px;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      font-family: monospace;
+    }
+    .grid {
+      display: table;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+    .row {
+      display: table-row;
+    }
+    .label {
+      display: table-cell;
+      width: 35%;
+      padding: 6px 0;
+      color: #6b7280;
+      font-size: 12px;
+      font-weight: 600;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .value {
+      display: table-cell;
+      width: 65%;
+      padding: 6px 0;
+      color: #111827;
+      font-size: 12px;
+      font-weight: 500;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .amount-box {
+      background: #f9fafb;
+      border: 1.5px solid #d1d5db;
+      border-radius: 6px;
+      padding: 12px;
+      margin: 16px 0;
+      text-align: center;
+    }
+    .amount-box .amount-label {
+      font-size: 11px;
+      font-weight: bold;
+      color: #4b5563;
+      text-transform: uppercase;
+    }
+    .amount-box .amount-val {
+      font-size: 22px;
+      font-weight: 800;
+      font-family: monospace;
+      color: #111827;
+      margin-top: 2px;
+    }
+    .signatures {
+      display: table;
+      width: 100%;
+      margin-top: 40px;
+      padding-top: 20px;
+    }
+    .sig-cell {
+      display: table-cell;
+      width: 50%;
+      text-align: center;
+      padding: 0 16px;
+    }
+    .sig-line {
+      border-top: 1px solid #374151;
+      margin-bottom: 6px;
+    }
+    .sig-text {
+      font-size: 11px;
+      font-weight: 600;
+      color: #4b5563;
+    }
+    .sig-sub {
+      font-size: 10px;
+      color: #9ca3af;
+    }
+    .footer {
+      margin-top: 24px;
+      text-align: center;
+      font-size: 10px;
+      color: #9ca3af;
+    }
+    @media print {
+      body { padding: 0; }
+      .voucher-card { border: 1.5px solid #000; }
+    }
+  </style>
+</head>
+<body>
+  <div class="voucher-card">
+    <div class="header">
+      <h1>COMPROBANTE DE PAGO MENOR</h1>
+      <h2>EGRESO DE CAJA / GASTO OPERATIVO</h2>
+      <div class="badge">N° COMPROBANTE: #${code}</div>
+    </div>
+
+    <div class="grid">
+      <div class="row">
+        <div class="label">Fecha del Gasto:</div>
+        <div class="value">${dateStr} (${item.fecha})</div>
+      </div>
+      <div class="row">
+        <div class="label">Beneficiario / Proveedor:</div>
+        <div class="value"><strong>${item.beneficiario}</strong></div>
+      </div>
+      <div class="row">
+        <div class="label">Documento / Cédula:</div>
+        <div class="value">${item.documento_beneficiario || 'No especificado'}</div>
+      </div>
+      <div class="row">
+        <div class="label">Categoría:</div>
+        <div class="value">${item.categoria}</div>
+      </div>
+      <div class="row">
+        <div class="label">Concepto / Motivo:</div>
+        <div class="value">${item.concepto}</div>
+      </div>
+      ${item.observaciones ? `
+      <div class="row">
+        <div class="label">Observaciones:</div>
+        <div class="value">${item.observaciones}</div>
+      </div>` : ''}
+    </div>
+
+    <div class="amount-box">
+      <div class="amount-label">Monto Total Pagado</div>
+      <div class="amount-val">${formatCOP(item.monto)}</div>
+    </div>
+
+    <div class="signatures">
+      <div class="sig-cell">
+        <div class="sig-line"></div>
+        <div class="sig-text">Entregado / Autorizado</div>
+        <div class="sig-sub">Cajero / Administrador</div>
+      </div>
+      <div class="sig-cell">
+        <div class="sig-line"></div>
+        <div class="sig-text">Recibido Conforme</div>
+        <div class="sig-sub">${item.beneficiario}</div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Soporte para libro fiscal y control interno de caja menor — Vendora POS
+    </div>
+  </div>
+</body>
+</html>`
+  }
+
+  const handlePrintReceipt = (item: PagoMenor) => {
+    const html = getReceiptHtml(item)
+    printHtmlDocument(html, `Recibo_Pago_Menor_${item.id.slice(0, 8)}`)
+  }
+
+  const handleDownloadReceipt = (item: PagoMenor) => {
+    const html = getReceiptHtml(item)
+    downloadHtmlDocument(html, `Recibo_Pago_Menor_${item.id.slice(0, 8)}.html`)
   }
 
   const filtered = useMemo(() => {
@@ -299,11 +515,12 @@ export default function PagosMenoresPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
-                          onClick={() => toast(`Visualizando recibo de ${item.concepto}`, { type: 'success' })}
-                          className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-[10px] font-bold inline-flex items-center gap-1 transition-colors border border-gray-200"
+                          onClick={() => setSelectedReceipt(item)}
+                          className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md text-[11px] font-semibold inline-flex items-center gap-1.5 transition-colors border border-gray-200"
+                          title="Ver e imprimir comprobante"
                         >
-                          <Receipt size={10} />
-                          Recibo
+                          <Receipt size={12} />
+                          Ver Recibo
                         </button>
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -447,6 +664,95 @@ export default function PagosMenoresPage() {
                   </button>
                 </div>
               </form>
+
+            </div>
+          </div>
+        )}
+
+        {/* Modal Vista Previa de Recibo */}
+        {selectedReceipt && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+            <div className="bg-white rounded-xl border border-gray-200 w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/70">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-gray-900 text-white flex items-center justify-center">
+                    <Receipt size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-bold text-gray-900">Comprobante de Pago Menor</h3>
+                    <p className="text-[11px] font-mono text-gray-500">#{selectedReceipt.id.slice(0, 8).toUpperCase()}</p>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedReceipt(null)} className="text-gray-400 hover:text-gray-600 p-1">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="bg-gray-50/80 rounded-xl p-4 border border-gray-100 space-y-2.5 text-[12px]">
+                  <div className="flex justify-between py-1 border-b border-gray-200/60">
+                    <span className="text-gray-500 font-medium">Fecha:</span>
+                    <span className="font-mono font-semibold text-gray-900">{selectedReceipt.fecha}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-gray-200/60">
+                    <span className="text-gray-500 font-medium">Beneficiario:</span>
+                    <span className="font-semibold text-gray-900">{selectedReceipt.beneficiario}</span>
+                  </div>
+                  {selectedReceipt.documento_beneficiario && (
+                    <div className="flex justify-between py-1 border-b border-gray-200/60">
+                      <span className="text-gray-500 font-medium">Documento / Cédula:</span>
+                      <span className="font-mono text-gray-700">{selectedReceipt.documento_beneficiario}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between py-1 border-b border-gray-200/60">
+                    <span className="text-gray-500 font-medium">Categoría:</span>
+                    <span>{categoryBadge(selectedReceipt.categoria)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-gray-200/60">
+                    <span className="text-gray-500 font-medium">Concepto:</span>
+                    <span className="font-medium text-gray-900 text-right max-w-[65%]">{selectedReceipt.concepto}</span>
+                  </div>
+                  {selectedReceipt.observaciones && (
+                    <div className="flex justify-between py-1 border-b border-gray-200/60">
+                      <span className="text-gray-500 font-medium">Observaciones:</span>
+                      <span className="text-gray-600 text-right max-w-[65%]">{selectedReceipt.observaciones}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-center">
+                  <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">Monto Entregado</span>
+                  <span className="text-2xl font-black font-mono text-emerald-950 block mt-0.5">{formatCOP(selectedReceipt.monto)}</span>
+                </div>
+              </div>
+
+              <div className="px-5 py-3.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setSelectedReceipt(null)}
+                  className="px-3.5 h-8 border border-gray-200 hover:bg-gray-100 text-gray-600 text-[11px] font-semibold rounded-lg transition-colors"
+                >
+                  Cerrar
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadReceipt(selectedReceipt)}
+                    className="px-3 h-8 border border-blue-200 bg-blue-50/60 hover:bg-blue-100/70 text-blue-700 text-[11px] font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <Download size={12} />
+                    Descargar HTML
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePrintReceipt(selectedReceipt)}
+                    className="px-4 h-8 bg-gray-900 hover:bg-gray-800 text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Printer size={12} />
+                    Imprimir Comprobante
+                  </button>
+                </div>
+              </div>
 
             </div>
           </div>

@@ -9,10 +9,21 @@ export function useCashRegister(usuarioId?: string, negocioId?: string | null) {
   const [activeSession, setActiveSession] = useState<ArqueoCaja | null>(null)
 
   const loadData = async () => {
-    if (!usuarioId) return
     setLoading(true)
     setError(null)
     try {
+      if (!usuarioId || !navigator.onLine) {
+        const active = await cashService.getActiveSession(usuarioId || 'Cajero', negocioId)
+        setActiveSession(active)
+        if (active) {
+          const sessionSales = await cashService.getTodaySessionSales(active)
+          setSales(sessionSales)
+        } else {
+          setSales([])
+        }
+        return
+      }
+
       const active = await cashService.getActiveSession(usuarioId, negocioId)
       setActiveSession(active)
       if (active) {
@@ -22,14 +33,17 @@ export function useCashRegister(usuarioId?: string, negocioId?: string | null) {
         setSales([])
       }
     } catch (err: any) {
-      setError(err.message || 'Error cargando datos de caja')
+      console.warn('[useCashRegister] Fallback to offline session:', err)
+      const active = await cashService.getActiveSession(usuarioId || 'Cajero', negocioId)
+      setActiveSession(active)
+      setSales([])
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (usuarioId) loadData()
+    loadData()
   }, [usuarioId, negocioId])
 
   const openCashRegister = async (montoInicial: number) => {

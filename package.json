@@ -1,5 +1,6 @@
 {
-  "name": "figma-make-app",
+  "name": "vendora-pos",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -10,7 +11,9 @@
     "electron": "electron .",
     "start": "node scripts/build-electron.js && electron .",
     "preview": "vite preview",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "package:win": "node scripts/build-electron.js && electron-builder --win --x64 --config electron-builder.yml",
+    "package:win:publish": "node scripts/build-electron.js && electron-builder --win --x64 --config electron-builder.yml --publish always"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.2",
@@ -32,6 +35,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.0",
     "electron": "^44.4.1",
+    "electron-builder": "^26.15.3",
     "oxfmt": "^0.2.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",

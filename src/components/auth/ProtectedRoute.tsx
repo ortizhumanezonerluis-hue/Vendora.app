@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import MainLayout from '../layout/MainLayout'
@@ -6,7 +6,7 @@ import { auditService } from '../../services/auditService'
 import { ShieldAlert } from 'lucide-react'
 
 interface ProtectedRouteProps {
-  children: JSX.Element
+  children: React.ReactElement
   allowedRoles?: ('admin' | 'empleado')[]
 }
 

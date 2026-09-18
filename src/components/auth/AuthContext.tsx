@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     async function checkSession() {
-      if (!navigator.onLine && isElectron) {
+      if (!navigator.onLine) {
         const cached = restoreCachedSession()
         if (cached?.user && cached?.profile) {
           setUser(cached.user)

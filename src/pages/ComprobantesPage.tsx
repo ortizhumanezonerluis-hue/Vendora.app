@@ -8,8 +8,10 @@ import { SkeletonPage } from '../components/ui/Skeleton'
 import {
   Receipt, Search, Printer, CheckCircle2, Clock,
   XCircle, ChevronDown, X, Calendar as CalendarIcon,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, WifiOff, Download, Eye
 } from 'lucide-react'
+import { offlineDb } from '../lib/offlineDb'
+import { printHtmlDocument, downloadHtmlDocument } from '../lib/printHelper'
 
 interface TicketItem {
   cantidad: number
@@ -58,15 +60,13 @@ export default function ComprobantesPage() {
   const datePickerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (profile?.negocio_id) {
-      loadBusinessConfig()
-      loadTickets()
-    }
+    loadBusinessConfig()
+    loadTickets()
   }, [profile])
 
   const loadBusinessConfig = async () => {
-    if (!profile?.negocio_id) return
     try {
+      if (!profile?.negocio_id) return
       const { data } = await supabase
         .from('configuracion_negocio')
         .select('nombre, direccion, telefono')
@@ -99,6 +99,32 @@ export default function ComprobantesPage() {
   const loadTickets = async () => {
     setLoading(true)
     try {
+      if (!navigator.onLine) {
+        const queued = await offlineDb.getQueuedSales()
+        const mapped: Ticket[] = queued.map(q => ({
+          id: q.id,
+          fecha: q.timestamp,
+          usuario_id: q.saleData.usuario_id || 'Cajero',
+          cajero: q.saleData.usuario_id || 'Cajero',
+          total: q.saleData.total,
+          metodo_pago: q.saleData.metodo_pago as any,
+          estado: 'completada',
+          detalles_venta: q.items.map(it => ({
+            cantidad: it.qty,
+            precio_unitario: it.product.precio_venta,
+            subtotal: it.qty * it.product.precio_venta,
+            productos: { nombre: it.product.nombre }
+          }))
+        }))
+        setTickets(mapped)
+        return
+      }
+
+      if (!profile?.negocio_id) {
+        setTickets([])
+        return
+      }
+
       const { data, error } = await supabase
         .from('ventas')
         .select(`
@@ -110,14 +136,31 @@ export default function ComprobantesPage() {
             )
           )
         `)
-        .eq('negocio_id', profile!.negocio_id)
+        .eq('negocio_id', profile.negocio_id)
         .order('fecha', { ascending: false })
         .limit(1000)
 
       if (error) throw error
       setTickets((data as any) || [])
     } catch (err: any) {
-      toast(err.message || 'Error cargando recibos', { type: 'error' })
+      console.warn('Error cargando comprobantes:', err)
+      const queued = await offlineDb.getQueuedSales()
+      const mapped: Ticket[] = queued.map(q => ({
+        id: q.id,
+        fecha: q.timestamp,
+        usuario_id: q.saleData.usuario_id || 'Cajero',
+        cajero: q.saleData.usuario_id || 'Cajero',
+        total: q.saleData.total,
+        metodo_pago: q.saleData.metodo_pago as any,
+        estado: 'completada',
+        detalles_venta: q.items.map(it => ({
+          cantidad: it.qty,
+          precio_unitario: it.product.precio_venta,
+          subtotal: it.qty * it.product.precio_venta,
+          productos: { nombre: it.product.nombre }
+        }))
+      }))
+      setTickets(mapped)
     } finally {
       setLoading(false)
     }
@@ -220,15 +263,15 @@ export default function ComprobantesPage() {
 
   const totalFiltrado = useMemo(() => filtered.reduce((s, t) => s + (t.total || 0), 0), [filtered])
 
-  // --- PRINT: Clean, professional, realistic POS ticket ---
-  const handlePrint = (ticket: Ticket) => {
+  // --- TICKET TEMPLATE & EXPORT ---
+  const getTicketHtml = (ticket: Ticket) => {
     const fecha = new Date(ticket.fecha).toLocaleString('es-CO', {
       day: '2-digit', month: '2-digit', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
     })
     const cajero = ticket.cajero || ticket.usuario_id || 'Cajero'
     const ticketNum = ticket.id.slice(0, 8).toUpperCase()
-    const storeName = businessConfig.nombre || profile?.negocio?.nombre || "Vendora"
+    const storeName = businessConfig.nombre || "Vendora"
     const storeAddress = businessConfig.direccion || ''
     const storePhone = businessConfig.telefono || ''
 
@@ -271,116 +314,7 @@ export default function ComprobantesPage() {
         </tr>
       `
 
-    const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Ticket #${ticketNum}</title>
-  <style>
-    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body {
-      width: 100%;
-      background: #f1f5f9;
-      display: flex;
-      justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      color: #111827;
-      font-size: 13px;
-      line-height: 1.4;
-      padding: 20px 0;
-    }
-    .ticket {
-      background: #ffffff;
-      width: 340px;
-      padding: 24px 20px;
-      margin: 0 auto;
-      border: 1px solid #e2e8f0;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-      border-radius: 6px;
-    }
-    .text-center { text-align: center; }
-    .text-right { text-align: right; }
-    .store-name {
-      font-size: 18px;
-      font-weight: 800;
-      letter-spacing: -0.3px;
-      text-transform: uppercase;
-      margin-bottom: 2px;
-    }
-    .store-info {
-      font-size: 11px;
-      color: #4b5563;
-      margin-bottom: 2px;
-    }
-    .divider {
-      border-top: 1px dashed #9ca3af;
-      margin: 12px 0;
-    }
-    .ticket-title {
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      margin-bottom: 6px;
-    }
-    .meta-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-      color: #374151;
-      margin: 2px 0;
-    }
-    .meta-row .label { color: #6b7280; }
-    .meta-row .val { font-weight: 600; }
-    table.items-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      margin: 4px 0;
-    }
-    table.items-table th {
-      font-size: 10px;
-      font-weight: 700;
-      color: #6b7280;
-      text-transform: uppercase;
-      padding-bottom: 4px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .total-box {
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px dashed #9ca3af;
-    }
-    .total-line {
-      display: flex;
-      justify-content: space-between;
-      font-size: 16px;
-      font-weight: 800;
-      margin-top: 4px;
-    }
-    .footer {
-      text-align: center;
-      margin-top: 14px;
-      font-size: 11px;
-      color: #6b7280;
-      line-height: 1.5;
-    }
-    @media print {
-      body {
-        background: #fff;
-        padding: 0;
-      }
-      .ticket {
-        border: none;
-        box-shadow: none;
-        width: 100%;
-        max-width: 300px;
-        padding: 8px;
-      }
-    }
-  </style>
-</head>
-<body>
+    const bodyHtml = `
   <div class="ticket">
     <!-- Header -->
     <div class="text-center">
@@ -446,21 +380,112 @@ export default function ComprobantesPage() {
       <p style="font-size: 10px; margin-top: 3px;">Documento interno de control de caja</p>
       <p style="font-size: 10px; color: #9ca3af;">Vendora POS</p>
     </div>
-  </div>
+  </div>`
 
-  <script>
-    window.onload = function() {
-      setTimeout(function() { window.print(); }, 400);
-    };
-  </script>
-</body>
-</html>`
+    const styles = `
+      body {
+        width: 100%;
+        background: #ffffff;
+        display: flex;
+        justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: #111827;
+        font-size: 13px;
+        line-height: 1.4;
+        padding: 10px 0;
+      }
+      .ticket {
+        background: #ffffff;
+        width: 340px;
+        padding: 16px;
+        margin: 0 auto;
+      }
+      .text-center { text-align: center; }
+      .text-right { text-align: right; }
+      .store-name {
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: -0.3px;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+      }
+      .store-info {
+        font-size: 11px;
+        color: #4b5563;
+        margin-bottom: 2px;
+      }
+      .divider {
+        border-top: 1px dashed #9ca3af;
+        margin: 10px 0;
+      }
+      .ticket-title {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+      .meta-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #374151;
+        margin: 2px 0;
+      }
+      .meta-row .label { color: #6b7280; }
+      .meta-row .val { font-weight: 600; }
+      table.items-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        margin: 4px 0;
+      }
+      table.items-table th {
+        font-size: 10px;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        padding-bottom: 4px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .total-box {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px dashed #9ca3af;
+      }
+      .total-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 16px;
+        font-weight: 800;
+        margin-top: 4px;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 14px;
+        font-size: 11px;
+        color: #6b7280;
+        line-height: 1.5;
+      }
+      @media print {
+        body { padding: 0; }
+        .ticket { width: 100%; max-width: 300px; padding: 4px; }
+      }
+    `
 
-    const w = window.open('', '_blank', 'width=460,height=750,left=200,top=50')
-    if (w) {
-      w.document.write(html)
-      w.document.close()
-    }
+    return { bodyHtml, styles, title: `Ticket #${ticketNum}` }
+  }
+
+  const handlePrint = (ticket: Ticket) => {
+    const { bodyHtml, styles, title } = getTicketHtml(ticket)
+    printHtmlDocument(title, bodyHtml, styles)
+  }
+
+  const handleDownload = (ticket: Ticket) => {
+    const { bodyHtml, styles, title } = getTicketHtml(ticket)
+    const ticketNum = ticket.id.slice(0, 8).toUpperCase()
+    downloadHtmlDocument(`Comprobante_Venta_${ticketNum}`, title, bodyHtml, styles)
+    toast('Comprobante descargado correctamente', { type: 'success' })
   }
 
   const estadoBadge = (estado: string) => {
@@ -712,14 +737,24 @@ export default function ComprobantesPage() {
                         <td className="px-5 py-3.5">{estadoBadge(t.estado)}</td>
                         <td className="px-5 py-3.5 text-right font-mono font-bold text-gray-900">{formatCOP(t.total)}</td>
                         <td className="px-5 py-3.5 text-right">
-                          <button
-                            onClick={() => handlePrint(t)}
-                            className="inline-flex items-center gap-1 h-7 px-2.5 border border-gray-200 hover:bg-gray-50 text-[11px] font-semibold text-gray-700 rounded-lg transition-colors"
-                            title="Imprimir recibo"
-                          >
-                            <Printer size={12} />
-                            Imprimir
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handlePrint(t)}
+                              className="inline-flex items-center gap-1 h-7 px-2.5 border border-gray-200 hover:bg-gray-50 text-[11px] font-semibold text-gray-700 rounded-lg transition-colors"
+                              title="Imprimir comprobante"
+                            >
+                              <Printer size={12} />
+                              Imprimir
+                            </button>
+                            <button
+                              onClick={() => handleDownload(t)}
+                              className="inline-flex items-center gap-1 h-7 px-2.5 border border-blue-200 bg-blue-50/50 hover:bg-blue-100/70 text-[11px] font-semibold text-blue-700 rounded-lg transition-colors"
+                              title="Descargar comprobante"
+                            >
+                              <Download size={12} />
+                              Descargar
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )

@@ -20,7 +20,7 @@ export default function CashRegisterPage() {
     openCashRegister, closeCashRegister, error
   } = useCashRegister(userName || undefined, negocioId)
 
-  const loading = authLoading || cashLoading || !profile
+  const loading = authLoading || cashLoading
 
   const [montoInicialInput, setMontoInicialInput] = useState('')
   const [cashEntered, setCashEntered] = useState('')

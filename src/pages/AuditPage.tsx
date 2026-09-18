@@ -68,8 +68,7 @@ export default function AuditPage() {
         alcance: scope,
         filtro_valor: scope !== 'todo' ? filterValue : undefined,
         ocultar_teorico: hideTheoretical,
-        estado: 'en_proceso',
-        diferencia_total: 0
+        estado: 'en_proceso'
       })
       toast('Sesión de auditoría creada', { type: 'success' })
       setSessions(prev => [newSession, ...prev])

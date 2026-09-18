@@ -3,7 +3,7 @@ import MainLayout from '../components/layout/MainLayout'
 import { useInventory } from '../hooks/useInventory'
 import { usePOS } from '../hooks/usePOS'
 import { useAuth } from '../components/auth/AuthContext'
-import { formatCOP } from '../lib/utils'
+import { formatCOP, formatStock } from '../lib/utils'
 import { toast } from '../components/ui/Toaster'
 import { useRemoteScanner } from '../hooks/useRemoteScanner'
 import { useBarcodeScanner } from '../hooks/useBarcodeScanner'
@@ -74,7 +74,7 @@ export default function POSPage() {
   })
 
   // 2. Mobile Scanner (Celular vía Supabase Broadcast)
-  useRemoteScanner(profile?.negocio_id, profile?.id, (code) => {
+  useRemoteScanner(profile?.negocio_id || undefined, profile?.id, (code) => {
     handleBarcodeScanned(code)
   })
 
@@ -92,7 +92,7 @@ export default function POSPage() {
       const matchSearch =
         search === '' ||
         p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        p.codigo_barras.includes(search)
+        (p.codigo_barras && p.codigo_barras.includes(search))
       return matchCat && matchSearch && p.stock_actual > 0
     })
   }, [productos, search, category])
@@ -245,7 +245,7 @@ export default function POSPage() {
                         }
                       }}
                       className={[
-                        'flex flex-col text-left p-3.5 bg-white rounded-xl hover:shadow-sm transition-all relative group cursor-pointer',
+                        'flex flex-col justify-between text-left p-3.5 bg-white rounded-xl hover:shadow-sm transition-all relative group cursor-pointer overflow-hidden min-h-[96px]',
                         inCart
                           ? 'border-2 border-gray-900 shadow-sm'
                           : 'border border-gray-200 hover:border-gray-900',
@@ -253,25 +253,25 @@ export default function POSPage() {
                     >
                       {/* Cart quantity badge on top right — only shows when in cart */}
                       {inCart && (
-                        <div className="absolute top-2 right-2 px-1.5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
-                          {prod.es_granel ? `${cartItem.cantidad.toFixed(2)} ${prod.unidad_medida || 'kg'}` : cartItem.cantidad}
+                        <div className="absolute top-2 right-2 px-1.5 h-5 bg-gray-900 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm z-10">
+                          {prod.es_granel ? `${Number(cartItem.cantidad.toFixed(3))} ${prod.unidad_medida || 'kg'}` : cartItem.cantidad}
                         </div>
                       )}
-                      <div className="flex-1 min-w-0 pr-6 mt-1">
+                      <div className="flex-1 min-w-0 pr-6">
                         <p className="text-[12px] font-semibold text-gray-900 truncate">{prod.nombre}</p>
                         <p className="text-[10px] text-gray-400 font-mono mt-0.5 truncate">{prod.codigo_barras || 'Sin código'}</p>
                       </div>
-                      <div className="flex items-center justify-between mt-3">
-                        <p className="text-[13px] font-bold text-gray-900 font-mono">
+                      <div className="flex items-center justify-between gap-1.5 mt-2.5 pt-1.5 border-t border-gray-100/60 w-full">
+                        <p className="text-[12px] font-bold text-gray-900 font-mono shrink-0 truncate">
                           {formatCOP(prod.precio_venta)}
-                          {prod.es_granel && <span className="text-[10px] text-slate-400 font-normal">/{prod.unidad_medida || 'kg'}</span>}
+                          {prod.es_granel && <span className="text-[9px] text-slate-400 font-normal">/{prod.unidad_medida || 'kg'}</span>}
                         </p>
                         <span className={[
-                          'text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0',
+                          'text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shrink-0 max-w-[55%] truncate',
                           prod.es_granel ? 'bg-blue-50 text-blue-700 border border-blue-200/60' : 'bg-gray-100 text-gray-500'
                         ].join(' ')}>
-                          {prod.es_granel && <Scale size={10} />}
-                          <span>{prod.stock_actual} {prod.es_granel ? (prod.unidad_medida || 'kg') : 'ud'}</span>
+                          {prod.es_granel && <Scale size={9} className="shrink-0" />}
+                          <span className="truncate">{formatStock(prod.stock_actual, prod.es_granel)} {prod.es_granel ? (prod.unidad_medida || 'kg') : 'ud'}</span>
                         </span>
                       </div>
                     </button>

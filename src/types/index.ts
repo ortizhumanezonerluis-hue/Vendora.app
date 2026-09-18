@@ -1,6 +1,6 @@
 export interface Producto {
   id: string
-  codigo_barras: string
+  codigo_barras?: string
   plu?: string
   nombre: string
   precio_costo: number
@@ -10,15 +10,24 @@ export interface Producto {
   categoria: string
   es_granel?: boolean
   unidad_medida?: 'UND' | 'kg' | 'lb' | 'g' | 'L' | 'm' | string
+  negocio_id?: string | null
+  impuesto?: number
+  imagen_url?: string
+  proveedor_id?: string | null
+  descripcion?: string
+  activo?: boolean
 }
 
 export interface Venta {
   id: string
   fecha: string
   usuario_id: string
+  cajero?: string
   total: number
   metodo_pago: 'efectivo' | 'transferencia' | 'tarjeta'
   estado: 'completada' | 'anulada'
+  negocio_id?: string | null
+  consecutivo?: string
 }
 
 export interface DetalleVenta {
@@ -50,6 +59,9 @@ export interface ArqueoCaja {
   efectivo_sistema?: number
   diferencia?: number
   estado: 'abierto' | 'cerrado'
+  auto_cerrado?: boolean
+  negocio_id?: string | null
+  notas?: string
 }
 
 export interface AuditLog {

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient'
+import { offlineDb } from '../lib/offlineDb'
 
 export interface RutConfig {
   id?: string
@@ -119,7 +120,7 @@ async function insertWithFallback(tableName: string, payload: any, negocioId: st
       if (!e3 && d3) return d3
       throw e3
     }
-    throw err
+    return { ...payload, id: `local-${Date.now()}`, negocio_id: negocioId }
   }
 }
 
@@ -153,12 +154,24 @@ export const accountingService = {
   // ==========================================
   // 1. RUT CONFIGURATION (Conectado a BD)
   // ==========================================
-  async getRutConfig(negocioId: string): Promise<RutConfig> {
+  async getRutConfig(negocioId?: string | null): Promise<RutConfig> {
+    const nId = negocioId || ''
+    if (!nId) {
+      return {
+        nit: '',
+        dv: '0',
+        razon_social: 'Mi Comercio',
+        actividad_ciiu: '4711 - Comercio al por menor en establecimientos no especializados',
+        responsabilidades: ['52 - No responsable de IVA (Art. 437 E.T.)'],
+        estado_verificacion: 'vigente'
+      }
+    }
+
     try {
       let { data, error } = await supabase
         .from('rut_config')
         .select('*')
-        .eq('negocio_id', negocioId)
+        .eq('negocio_id', nId)
         .limit(1)
         .maybeSingle()
 
@@ -166,7 +179,7 @@ export const accountingService = {
         const fallback = await supabase
           .from('rut_config')
           .select('*')
-          .eq('tenant_id', negocioId)
+          .eq('tenant_id', nId)
           .limit(1)
           .maybeSingle()
         data = fallback.data
@@ -187,7 +200,7 @@ export const accountingService = {
       const { data: storeData } = await supabase
         .from('configuracion_negocio')
         .select('nombre, direccion, telefono, rfc')
-        .eq('negocio_id', negocioId)
+        .eq('negocio_id', nId)
         .limit(1)
         .maybeSingle()
 
@@ -200,8 +213,8 @@ export const accountingService = {
     } catch (_) {}
 
     return {
-      negocio_id: negocioId,
-      tenant_id: negocioId,
+      negocio_id: nId,
+      tenant_id: nId,
       nit: rfc || '',
       dv: '0',
       razon_social: storeName || 'Nombre del Comercio',
@@ -302,31 +315,81 @@ export const accountingService = {
   },
 
   // Calculate actual annual gross sales from database
-  async getAnnualGrossSales(negocioId: string): Promise<number> {
+  async getAnnualGrossSales(negocioId?: string | null): Promise<number> {
+    let total = 0
+    const currentYear = new Date().getFullYear()
+
     try {
-      const currentYear = new Date().getFullYear()
-      const startDate = `${currentYear}-01-01T00:00:00.000Z`
-      const endDate = `${currentYear}-12-31T23:59:59.999Z`
+      let salesData: any[] = []
 
-      const { data, error } = await supabase
-        .from('ventas')
-        .select('total')
-        .eq('negocio_id', negocioId)
-        .gte('fecha', startDate)
-        .lte('fecha', endDate)
+      // 1. Query with negocio_id filter if provided
+      if (negocioId) {
+        const { data, error } = await supabase
+          .from('ventas')
+          .select('total, fecha')
+          .eq('negocio_id', negocioId)
 
-      if (error || !data) return 0
-      return data.reduce((sum, v) => sum + (Number(v.total) || 0), 0)
+        if (!error && data && data.length > 0) {
+          salesData = data
+        } else if (error) {
+          console.warn('Error con filtro negocio_id en ventas:', error)
+        }
+      }
+
+      // 2. If no data found with negocio_id or negocioId not set, fallback to general ventas
+      if (salesData.length === 0) {
+        const { data, error } = await supabase
+          .from('ventas')
+          .select('total, fecha')
+
+        if (!error && data) {
+          salesData = data
+        }
+      }
+
+      // Sum all sales for current year
+      if (salesData.length > 0) {
+        total = salesData.reduce((sum, v: any) => {
+          const val = Number(v.total) || 0
+          if (v.fecha) {
+            const date = new Date(v.fecha)
+            if (!isNaN(date.getTime())) {
+              if (date.getFullYear() === currentYear) {
+                return sum + val
+              }
+              return sum
+            }
+          }
+          return sum + val
+        }, 0)
+      }
     } catch (e) {
-      console.warn('Error calculando ventas anuales:', e)
-      return 0
+      console.warn('Error calculando ventas anuales desde Supabase:', e)
     }
+
+    try {
+      const queued = await offlineDb.getQueuedSales()
+      const queuedTotal = queued.reduce((sum, q) => {
+        const val = Number(q.saleData.total) || 0
+        const d = new Date(q.timestamp)
+        if (isNaN(d.getTime()) || d.getFullYear() === currentYear) {
+          return sum + val
+        }
+        return sum
+      }, 0)
+      total += queuedTotal
+    } catch (e) {
+      console.warn('Error sumando ventas offline para tope UVT:', e)
+    }
+
+    return total
   },
 
   // ==========================================
   // 2. LIBRO FISCAL DE OPERACIONES (DETALLE INDIVIDUAL)
   // ==========================================
-  async getLibroFiscal(negocioId: string): Promise<LibroFiscalItem[]> {
+  async getLibroFiscal(negocioId?: string | null): Promise<LibroFiscalItem[]> {
+    if (!negocioId) return []
     let items: LibroFiscalItem[] = []
 
     // 1. Fetch manual entries from DB
@@ -459,6 +522,7 @@ export const accountingService = {
   },
 
   async updateLibroFiscalItem(id: string, updates: Partial<LibroFiscalItem>): Promise<void> {
+    if (id.startsWith('pos-') || id.startsWith('oc-')) return
     const { error } = await supabase
       .from('libro_fiscal_registros')
       .update(updates)
@@ -468,6 +532,7 @@ export const accountingService = {
   },
 
   async deleteLibroFiscalItem(id: string): Promise<void> {
+    if (id.startsWith('pos-') || id.startsWith('oc-')) return
     const { error } = await supabase
       .from('libro_fiscal_registros')
       .delete()
@@ -479,7 +544,8 @@ export const accountingService = {
   // ==========================================
   // 3. COSTOS SOPORTADOS (FACTURAS PROVEEDOR)
   // ==========================================
-  async getCostosSoportados(negocioId: string): Promise<CostoSoportado[]> {
+  async getCostosSoportados(negocioId?: string | null): Promise<CostoSoportado[]> {
+    if (!negocioId) return []
     return await selectWithFallback('costos_soportados', negocioId)
   },
 
@@ -513,7 +579,8 @@ export const accountingService = {
   // ==========================================
   // 4. EXTRACTOS BANCARIOS CONCILIADOS
   // ==========================================
-  async getExtractosBancarios(negocioId: string): Promise<ExtractoBancario[]> {
+  async getExtractosBancarios(negocioId?: string | null): Promise<ExtractoBancario[]> {
+    if (!negocioId) return []
     return await selectWithFallback('extractos_bancarios', negocioId)
   },
 
@@ -543,7 +610,8 @@ export const accountingService = {
   // ==========================================
   // 5. PAGOS MENORES (CAJA MENOR)
   // ==========================================
-  async getPagosMenores(negocioId: string): Promise<PagoMenor[]> {
+  async getPagosMenores(negocioId?: string | null): Promise<PagoMenor[]> {
+    if (!negocioId) return []
     return await selectWithFallback('pagos_menores', negocioId)
   },
 

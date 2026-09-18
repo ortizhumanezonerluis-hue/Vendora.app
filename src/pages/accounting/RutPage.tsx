@@ -37,17 +37,16 @@ export default function RutPage() {
   const [formPdfUrl, setFormPdfUrl] = useState('')
 
   useEffect(() => {
-    if (profile?.negocio_id) {
-      loadRut()
-    }
-  }, [profile])
+    loadRut()
+  }, [profile?.negocio_id, profile?.id])
 
   const loadRut = async () => {
     setLoading(true)
+    const nId = profile?.negocio_id || profile?.id || undefined
     try {
       const [rutData, salesTotal] = await Promise.all([
-        accountingService.getRutConfig(profile!.negocio_id),
-        accountingService.getAnnualGrossSales(profile!.negocio_id)
+        accountingService.getRutConfig(nId),
+        accountingService.getAnnualGrossSales(nId)
       ])
 
       setRut(rutData)

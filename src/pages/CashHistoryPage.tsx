@@ -129,7 +129,7 @@ export default function CashHistoryPage() {
     try {
       let sales = await cashService.getSalesForSession(session)
       // Non-admin can only see their own sales details
-      if (profile?.rol !== 'admin') {
+      if (profile?.rol !== 'admin' && profile?.nombre) {
         sales = sales.filter(s => s.cajero === profile.nombre || s.usuario_id === profile.nombre)
       }
       setSessionSales(sales)

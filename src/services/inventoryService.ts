@@ -1,87 +1,183 @@
 import { supabase } from '../lib/supabaseClient'
 import { Producto, MovimientoInventario } from '../types'
 import { auditService } from './auditService'
-import { desktopDB, isElectron } from '../lib/electronBridge'
+import { offlineDb } from '../lib/offlineDb'
 
 export const inventoryService = {
   async getProductos(negocioId?: string | null): Promise<Producto[]> {
-    if (isElectron && desktopDB) {
-      return (await desktopDB.getProductos(negocioId ?? undefined)) as Producto[]
+    if (!navigator.onLine) {
+      const cached = await offlineDb.getCachedProducts()
+      return cached || []
     }
-    let query = supabase.from('productos').select('*').order('nombre', { ascending: true })
-    if (negocioId) query = query.eq('negocio_id', negocioId)
-    const { data, error } = await query
-    if (error) throw error
-    return data || []
+    try {
+      let query = supabase.from('productos').select('*').order('nombre', { ascending: true })
+      if (negocioId) query = query.eq('negocio_id', negocioId)
+      const { data, error } = await query
+      if (error) throw error
+      if (data && data.length >= 0) {
+        await offlineDb.saveProductsCache(data)
+      }
+      return data || []
+    } catch (err) {
+      console.warn('[InventoryService] Sin conexión a Supabase, cargando catálogo de caché local:', err)
+      const cached = await offlineDb.getCachedProducts()
+      return cached || []
+    }
   },
 
   async getProductoById(id: string): Promise<Producto | null> {
-    if (isElectron && desktopDB) {
-      return (await desktopDB.getProductoById(id)) as Producto | null
+    try {
+      const { data, error } = await supabase
+        .from('productos')
+        .select('*')
+        .eq('id', id)
+        .single()
+      if (error) throw error
+      return data
+    } catch {
+      const cached = await offlineDb.getCachedProducts()
+      return cached.find(p => p.id === id) || null
     }
-    const { data, error } = await supabase
-      .from('productos')
-      .select('*')
-      .eq('id', id)
-      .single()
-    if (error) throw error
-    return data
   },
 
   async createProducto(producto: Omit<Producto, 'id'>, usuario: string = 'Sistema', negocioId?: string | null): Promise<Producto> {
-    if (isElectron && desktopDB) {
-      const saved = await desktopDB.saveProducto({ ...producto, negocio_id: negocioId })
-      return saved as Producto
+    const tempId = `P_${Date.now()}`
+    const fullProduct: Producto = {
+      ...producto,
+      id: tempId,
+      negocio_id: negocioId || undefined,
+      stock_actual: Number(producto.stock_actual) || 0,
+      stock_minimo: Number(producto.stock_minimo) || 0,
+      precio_costo: Number(producto.precio_costo) || 0,
+      precio_venta: Number(producto.precio_venta) || 0
     }
-    const insertData = negocioId ? { ...producto, negocio_id: negocioId } : producto
-    const { data, error } = await supabase
-      .from('productos')
-      .insert([insertData])
-      .select()
-      .single()
-    if (error) throw error
 
-    // Audit log: info
-    await auditService.createAuditLog({
-      user: usuario,
-      action: 'Producto creado',
-      detail: `Se agregó "${producto.nombre}" al catálogo con stock inicial de ${producto.stock_actual} unidades.`,
-      severity: 'info',
-      negocioId: negocioId ?? undefined
-    })
+    if (!navigator.onLine) {
+      await offlineDb.addOrUpdateCachedProduct(fullProduct)
+      await offlineDb.queuePendingProduct({
+        id: `queue_${tempId}`,
+        tempId,
+        productData: fullProduct,
+        action: 'create',
+        timestamp: new Date().toISOString()
+      })
+      return fullProduct
+    }
 
-    return data
+    try {
+      const insertData = negocioId ? { ...producto, negocio_id: negocioId } : producto
+      const { data, error } = await supabase
+        .from('productos')
+        .insert([insertData])
+        .select()
+        .single()
+      if (error) throw error
+
+      if (data) {
+        await offlineDb.addOrUpdateCachedProduct(data)
+      }
+
+      // Audit log: info
+      try {
+        await auditService.createAuditLog({
+          user: usuario,
+          action: 'Producto creado',
+          detail: `Se agregó "${producto.nombre}" al catálogo con stock inicial de ${producto.stock_actual} unidades.`,
+          severity: 'info',
+          negocioId: negocioId ?? undefined
+        })
+      } catch (_) {}
+
+      return data
+    } catch (err: any) {
+      console.warn('[InventoryService] Error guardando producto en Supabase. Guardando localmente en cola:', err)
+      await offlineDb.addOrUpdateCachedProduct(fullProduct)
+      await offlineDb.queuePendingProduct({
+        id: `queue_${tempId}`,
+        tempId,
+        productData: fullProduct,
+        action: 'create',
+        timestamp: new Date().toISOString()
+      })
+      return fullProduct
+    }
   },
 
   async updateProducto(id: string, updates: Partial<Producto>): Promise<Producto> {
-    if (isElectron && desktopDB) {
-      const saved = await desktopDB.saveProducto({ id, ...updates })
-      return saved as Producto
+    const cached = await offlineDb.getCachedProducts()
+    const existing = cached.find(p => p.id === id)
+    const updatedLocally: Producto = { ...(existing || {}), ...updates, id } as Producto
+    await offlineDb.addOrUpdateCachedProduct(updatedLocally)
+
+    if (!navigator.onLine || id.startsWith('P_')) {
+      await offlineDb.queuePendingProduct({
+        id: `queue_update_${id}_${Date.now()}`,
+        tempId: id,
+        productData: updatedLocally,
+        action: 'update',
+        timestamp: new Date().toISOString()
+      })
+      return updatedLocally
     }
-    const { data, error } = await supabase
-      .from('productos')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
-    if (error) throw error
-    return data
+
+    try {
+      const { data, error } = await supabase
+        .from('productos')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      if (data) {
+        await offlineDb.addOrUpdateCachedProduct(data)
+      }
+      return data
+    } catch (err) {
+      await offlineDb.queuePendingProduct({
+        id: `queue_update_${id}_${Date.now()}`,
+        tempId: id,
+        productData: updatedLocally,
+        action: 'update',
+        timestamp: new Date().toISOString()
+      })
+      return updatedLocally
+    }
   },
 
   async deleteProducto(id: string): Promise<void> {
-    if (isElectron && desktopDB) {
-      await desktopDB.deleteProducto(id)
+    await offlineDb.removeCachedProduct(id)
+
+    if (!navigator.onLine || id.startsWith('P_')) {
+      await offlineDb.queuePendingProduct({
+        id: `queue_del_${id}_${Date.now()}`,
+        tempId: id,
+        productData: { id } as any,
+        action: 'delete',
+        timestamp: new Date().toISOString()
+      })
       return
     }
-    const { error } = await supabase
-      .from('productos')
-      .delete()
-      .eq('id', id)
-    if (error) throw error
+
+    try {
+      const { error } = await supabase
+        .from('productos')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+    } catch (err) {
+      console.warn('[InventoryService] Error eliminando en Supabase, encolado offline:', err)
+      await offlineDb.queuePendingProduct({
+        id: `queue_del_${id}_${Date.now()}`,
+        tempId: id,
+        productData: { id } as any,
+        action: 'delete',
+        timestamp: new Date().toISOString()
+      })
+    }
   },
 
   async getMovimientos(productoId?: string): Promise<MovimientoInventario[]> {
-    if (isElectron || !navigator.onLine) {
+    if (!navigator.onLine) {
       return []
     }
     try {
@@ -99,7 +195,7 @@ export const inventoryService = {
   },
 
   /**
-   * Registra el movimiento, actualiza stock en SQLite (Electron) o Supabase (Web),
+   * Registra el movimiento, actualiza stock en Supabase,
    * y crea audit log + notificación según el nivel de stock resultante.
    */
   async registrarMovimiento(
@@ -107,18 +203,6 @@ export const inventoryService = {
     productoNombre: string = 'Producto',
     stockMinimo: number = 10
   ): Promise<MovimientoInventario> {
-    if (isElectron && desktopDB) {
-      const prod = await desktopDB.getProductoById(movimiento.producto_id)
-      const currentStock = prod?.stock_actual || 0
-      const newStock = Number((currentStock + movimiento.cantidad).toFixed(3))
-      await desktopDB.saveProducto({ ...prod, id: movimiento.producto_id, stock_actual: newStock })
-      return {
-        ...movimiento,
-        id: `mov_${Date.now()}`,
-        fecha: new Date().toISOString()
-      }
-    }
-
     // 1. Insert movement
     const { data: movData, error: movError } = await supabase
       .from('movimientos_inventario')

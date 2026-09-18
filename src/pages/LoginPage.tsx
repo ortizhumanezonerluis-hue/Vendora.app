@@ -38,7 +38,8 @@ export default function LoginPage() {
         })
         if (!result.success) {
           const errors: Record<string, string> = {}
-          result.error.errors.forEach((err) => {
+          const issues = (result.error as any).issues || (result.error as any).errors || []
+          issues.forEach((err: any) => {
             if (err.path[0]) errors[err.path[0] as string] = err.message
           })
           setFieldErrors(errors)
@@ -51,7 +52,8 @@ export default function LoginPage() {
         const result = loginSchema.safeParse({ email, password })
         if (!result.success) {
           const errors: Record<string, string> = {}
-          result.error.errors.forEach((err) => {
+          const issues = (result.error as any).issues || (result.error as any).errors || []
+          issues.forEach((err: any) => {
             if (err.path[0]) errors[err.path[0] as string] = err.message
           })
           setFieldErrors(errors)

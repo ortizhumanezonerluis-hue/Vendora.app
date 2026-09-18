@@ -12,14 +12,22 @@ export function cn(...classes: (string | boolean | undefined)[]) {
 }
 
 export function formatStock(value: number, isGranel = false): string {
-  if (isNaN(value)) return '0'
+  if (isNaN(value) || value === null || value === undefined) return '0'
   if (!isGranel) {
     return Math.round(value).toLocaleString('es-CO')
   }
-  // For granel, limit to at most 2 decimals and remove trailing zeros
-  return Number(value.toFixed(2)).toLocaleString('es-CO', {
+  // For granel, limit to at most 3 decimals without trailing junk
+  return Number(Number(value).toFixed(3)).toLocaleString('es-CO', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 3
+  })
+}
+
+export function formatGranelQuantity(value: number): string {
+  if (isNaN(value) || value === null || value === undefined) return '0'
+  return Number(Number(value).toFixed(3)).toLocaleString('es-CO', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 3
   })
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { isElectron, desktopScanner } from '../lib/electronBridge'
 
 export interface RemoteScannerEvent {
   code: string
@@ -21,9 +22,23 @@ export function useRemoteScanner(
   }, [onCodeDetected])
 
   useEffect(() => {
+    if (isElectron) {
+      if (desktopScanner) {
+        const cleanup = desktopScanner.onCodeReceived((code) => {
+          if (code) {
+            onCodeDetectedRef.current(code, 'form')
+          }
+        })
+        return () => {
+          if (cleanup) cleanup()
+        }
+      }
+      return
+    }
+
     if (!negocioId) return
 
-    // Initialize Supabase Broadcast Channel for real-time mobile sync
+    // Initialize Supabase Broadcast Channel for real-time mobile sync (Web only)
     const channel = supabase.channel(`scanner-events:${negocioId}`, {
       config: {
         broadcast: { self: false }
@@ -51,29 +66,36 @@ export function useRemoteScanner(
 
 // Global broadcast function so any mobile client can emit scans to this tenant
 export async function sendRemoteScan(negocioId: string, userId: string, code: string, mode: 'form' | 'continuous') {
-  const channel = supabase.channel(`scanner-events:${negocioId}`, {
-    config: {
-      broadcast: { self: true }
-    }
-  })
+  if (isElectron) return
 
-  await new Promise<void>((resolve) => {
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.send({
-          type: 'broadcast',
-          event: 'scan',
-          payload: {
-            code,
-            mode,
-            timestamp: Date.now(),
-            userId,
-            negocioId
-          } as RemoteScannerEvent
-        })
-        supabase.removeChannel(channel)
-        resolve()
+  try {
+    const channel = supabase.channel(`scanner-events:${negocioId}`, {
+      config: {
+        broadcast: { self: true }
       }
     })
-  })
+
+    await new Promise<void>((resolve) => {
+      channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.send({
+            type: 'broadcast',
+            event: 'scan',
+            payload: {
+              code,
+              mode,
+              timestamp: Date.now(),
+              userId,
+              negocioId
+            } as RemoteScannerEvent
+          })
+          supabase.removeChannel(channel)
+          resolve()
+        }
+      })
+    })
+  } catch (err) {
+    console.warn('[sendRemoteScan] Error enviando escaneo:', err)
+  }
 }
+

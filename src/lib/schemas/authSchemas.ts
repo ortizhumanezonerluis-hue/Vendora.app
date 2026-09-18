@@ -9,8 +9,8 @@ export const createUserSchema = z.object({
   nombre: z.string().min(3, 'El nombre debe tener al menos 3 caracteres'),
   email: z.string().email('Ingresa un correo electrónico válido'),
   password: z.string().min(6, 'La contraseña inicial debe tener al menos 6 caracteres'),
-  rol: z.enum(['admin', 'empleado'], {
-    errorMap: () => ({ message: 'El rol debe ser admin o empleado' })
+  rol: z.enum(['admin', 'empleado'] as const, {
+    message: 'El rol debe ser admin o empleado'
   })
 })
 

@@ -11,7 +11,6 @@ declare global {
 
 export const isElectron = typeof window !== 'undefined' && Boolean(window.vendoraDesktop?.system?.isElectron)
 
-export const desktopDB = isElectron ? window.vendoraDesktop!.db : null
-export const desktopBackup = isElectron ? window.vendoraDesktop!.backup : null
-export const desktopScanner = isElectron ? window.vendoraDesktop!.scanner : null
-export const desktopSystem = isElectron ? window.vendoraDesktop!.system : null
+export const desktopScanner = isElectron ? window.vendoraDesktop?.scanner : null
+export const desktopSystem = isElectron ? window.vendoraDesktop?.system : null
+

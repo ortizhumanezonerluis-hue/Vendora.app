@@ -25,7 +25,7 @@ export default function ScannerPage() {
   }
 
   // Listen to remote scans in real-time on the desktop scan page
-  useRemoteScanner(profile?.negocio_id, profile?.id, (code) => {
+  useRemoteScanner(profile?.negocio_id || undefined, profile?.id, (code) => {
     setInput(code)
     search(code)
   })
@@ -158,7 +158,12 @@ export default function ScannerPage() {
                 {productos.slice(0, 5).map((p) => (
                   <button
                     key={p.id}
-                    onClick={() => { setInput(p.codigo_barras); search(p.codigo_barras) }}
+                    onClick={() => {
+                      if (p.codigo_barras) {
+                        setInput(p.codigo_barras)
+                        search(p.codigo_barras)
+                      }
+                    }}
                     className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors text-left"
                   >
                     <div>

@@ -9,6 +9,37 @@ const crypto_1 = __importDefault(require("crypto"));
 function genId(prefix = '') {
     return `${prefix}${crypto_1.default.randomUUID()}`;
 }
+function ensureNegocioExists(db, negocioId, nombre) {
+    const negId = negocioId || 'negocio-local-principal';
+    try {
+        db.prepare(`
+      INSERT OR IGNORE INTO negocios (id, nombre, email_contacto, telefono, direccion)
+      VALUES (?, ?, 'contacto@vendora.local', '0000000000', 'Local Principal')
+    `).run(negId, nombre || 'Mi Comercio Local');
+        db.prepare(`
+      INSERT OR IGNORE INTO configuracion_negocio (id, negocio_id, moneda, impuesto_iva_defecto, habilitar_granel, unidad_medida_defecto, prefijo_factura, consecutivo_actual, tema, nombre_comercial)
+      VALUES (?, ?, 'COP', 19, 1, 'kg', 'POS-', 1, 'light', ?)
+    `).run(`config-${negId}`, negId, nombre || 'Mi Comercio Local');
+    }
+    catch (err) {
+        console.warn('[Repositories] Error asegurando negocio:', err);
+    }
+    return negId;
+}
+function ensureUsuarioExists(db, usuarioId, negocioId, nombre) {
+    const negId = ensureNegocioExists(db, negocioId);
+    const usrId = usuarioId || 'usr-admin-principal';
+    try {
+        db.prepare(`
+      INSERT OR IGNORE INTO usuarios (id, negocio_id, email, nombre, rol, pin_acceso, activo)
+      VALUES (?, ?, ?, ?, 'admin', '1234', 1)
+    `).run(usrId, negId, `${usrId}@vendora.local`, nombre || usrId);
+    }
+    catch (err) {
+        console.warn('[Repositories] Error asegurando usuario:', err);
+    }
+    return usrId;
+}
 exports.dbRepositories = {
     // ===================== PRODUCTOS =====================
     getProductos(negocioId) {
@@ -27,7 +58,7 @@ exports.dbRepositories = {
     saveProducto(prod) {
         const db = (0, database_1.getDatabase)();
         const id = prod.id || genId('prod-');
-        const negocioId = prod.negocio_id || 'negocio-local-principal';
+        const negocioId = ensureNegocioExists(db, prod.negocio_id);
         const stmt = db.prepare(`
       INSERT INTO productos (
         id, negocio_id, codigo_barras, plu, nombre, precio_costo, precio_venta,
@@ -105,7 +136,8 @@ exports.dbRepositories = {
         const db = (0, database_1.getDatabase)();
         const { venta, detalles } = payload;
         const ventaId = venta.id || genId('vta-');
-        const negocioId = venta.negocio_id || 'negocio-local-principal';
+        const negocioId = ensureNegocioExists(db, venta.negocio_id);
+        const usuarioId = ensureUsuarioExists(db, venta.usuario_id, negocioId, venta.cajero);
         const executeCheckout = db.transaction(() => {
             // 1. Obtener consecutivo
             const config = db.prepare('SELECT prefijo_factura, consecutivo_actual FROM configuracion_negocio WHERE negocio_id = ?').get(negocioId);
@@ -123,7 +155,7 @@ exports.dbRepositories = {
           ?, ?, ?, datetime('now', 'localtime'), ?, ?, ?,
           ?, ?, ?, ?, 'completada', ?, ?, ?
         )
-      `).run(ventaId, negocioId, consecutivoStr, venta.usuario_id || 'usr-admin-principal', Number(venta.total) || 0, Number(venta.subtotal) || 0, Number(venta.iva_total) || 0, venta.metodo_pago || 'efectivo', Number(venta.monto_recibido) || Number(venta.total) || 0, Number(venta.cambio) || 0, venta.cliente_id || null, venta.cliente_nombre || null, venta.notas || null);
+      `).run(ventaId, negocioId, consecutivoStr, usuarioId, Number(venta.total) || 0, Number(venta.subtotal) || 0, Number(venta.iva_total) || 0, venta.metodo_pago || 'efectivo', Number(venta.monto_recibido) || Number(venta.total) || 0, Number(venta.cambio) || 0, venta.cliente_id || null, venta.cliente_nombre || null, venta.notas || null);
             // 3. Insertar detalles y descontar stock
             const insertDetalle = db.prepare(`
         INSERT INTO detalle_ventas (
@@ -145,13 +177,13 @@ exports.dbRepositories = {
                 const price = Number(item.precio_unitario) || 0;
                 const sub = Number(item.subtotal) || (qty * price);
                 insertDetalle.run(detId, ventaId, item.producto_id, item.producto_nombre || 'Producto', qty, price, sub, Number(item.iva_porcentaje) || 0, Number(item.iva_monto) || 0, item.unidad_medida || 'UND');
-                // Descontar stock (permite números negativos para sobreventas a granel autorizadas)
+                // Descontar stock
                 updateStock.run(qty, item.producto_id);
                 // Registrar movimiento de salida por venta
-                insertMov.run(genId('mov-'), negocioId, item.producto_id, qty, `Venta #${consecutivoStr}`, venta.usuario_id || 'usr-admin-principal');
+                insertMov.run(genId('mov-'), negocioId, item.producto_id, qty, `Venta #${consecutivoStr}`, usuarioId);
             }
-            // 4. Actualizar total de ventas en el arqueo de caja abierto si existe
-            const arqueoAbierto = db.prepare('SELECT id FROM arqueos_caja WHERE negocio_id = ? AND estado = "abierto" ORDER BY fecha_apertura DESC LIMIT 1').get(negocioId);
+            // 4. Actualizar total de ventas en el arqueo de caja abierto si existe (COMILLAS SIMPLES)
+            const arqueoAbierto = db.prepare("SELECT id FROM arqueos_caja WHERE negocio_id = ? AND estado = 'abierto' ORDER BY fecha_apertura DESC LIMIT 1").get(negocioId);
             if (arqueoAbierto) {
                 if (venta.metodo_pago === 'efectivo') {
                     db.prepare('UPDATE arqueos_caja SET total_ventas_efectivo = total_ventas_efectivo + ? WHERE id = ?').run(Number(venta.total) || 0, arqueoAbierto.id);
@@ -171,9 +203,39 @@ exports.dbRepositories = {
         });
         return executeCheckout();
     },
-    getVentas(limit = 100) {
+    getVentas(limit = 200, negocioId) {
         const db = (0, database_1.getDatabase)();
-        return db.prepare('SELECT * FROM ventas ORDER BY fecha DESC LIMIT ?').all(limit);
+        let query = 'SELECT * FROM ventas';
+        const params = [];
+        if (negocioId) {
+            query += ' WHERE negocio_id = ?';
+            params.push(negocioId);
+        }
+        query += ' ORDER BY fecha DESC LIMIT ?';
+        params.push(limit);
+        const ventas = db.prepare(query).all(...params);
+        const getDetalles = db.prepare(`
+      SELECT dv.*, p.nombre as producto_nombre
+      FROM detalle_ventas dv
+      LEFT JOIN productos p ON dv.producto_id = p.id
+      WHERE dv.venta_id = ?
+    `);
+        return ventas.map(v => {
+            const rawDetalles = getDetalles.all(v.id);
+            return {
+                ...v,
+                cajero: v.usuario_id,
+                detalles_venta: rawDetalles.map(d => ({
+                    cantidad: d.cantidad,
+                    precio_unitario: d.precio_unitario,
+                    subtotal: d.subtotal,
+                    productos: {
+                        nombre: d.producto_nombre || d.producto_id,
+                        precio_costo: 0
+                    }
+                }))
+            };
+        });
     },
     getDetallesVenta(ventaId) {
         const db = (0, database_1.getDatabase)();
@@ -182,22 +244,29 @@ exports.dbRepositories = {
     // ===================== ARQUEOS DE CAJA =====================
     getArqueoActivo(negocioId) {
         const db = (0, database_1.getDatabase)();
-        return db.prepare('SELECT * FROM arqueos_caja WHERE estado = "abierto" ORDER BY fecha_apertura DESC LIMIT 1').get();
+        if (negocioId) {
+            return db.prepare("SELECT * FROM arqueos_caja WHERE negocio_id = ? AND estado = 'abierto' ORDER BY fecha_apertura DESC LIMIT 1").get(negocioId);
+        }
+        return db.prepare("SELECT * FROM arqueos_caja WHERE estado = 'abierto' ORDER BY fecha_apertura DESC LIMIT 1").get();
     },
-    getHistorialArqueos(limit = 50) {
+    getHistorialArqueos(limit = 50, negocioId) {
         const db = (0, database_1.getDatabase)();
+        if (negocioId) {
+            return db.prepare('SELECT * FROM arqueos_caja WHERE negocio_id = ? ORDER BY fecha_apertura DESC LIMIT ?').all(negocioId, limit);
+        }
         return db.prepare('SELECT * FROM arqueos_caja ORDER BY fecha_apertura DESC LIMIT ?').all(limit);
     },
     abrirCaja(payload) {
         const db = (0, database_1.getDatabase)();
         const id = genId('arq-');
-        const negId = payload.negocio_id || 'negocio-local-principal';
+        const negId = ensureNegocioExists(db, payload.negocio_id);
+        const usrId = ensureUsuarioExists(db, payload.usuario_id, negId, payload.usuario_nombre);
         db.prepare(`
       INSERT INTO arqueos_caja (
         id, negocio_id, usuario_id, usuario_nombre, fecha_apertura, monto_inicial,
         total_ventas_efectivo, total_ventas_transferencia, total_ventas_tarjeta, estado
       ) VALUES (?, ?, ?, ?, datetime('now', 'localtime'), ?, 0, 0, 0, 'abierto')
-    `).run(id, negId, payload.usuario_id, payload.usuario_nombre, Number(payload.monto_inicial) || 0);
+    `).run(id, negId, usrId, payload.usuario_nombre, Number(payload.monto_inicial) || 0);
         return db.prepare('SELECT * FROM arqueos_caja WHERE id = ?').get(id);
     },
     cerrarCaja(payload) {
@@ -221,14 +290,17 @@ exports.dbRepositories = {
         return db.prepare('SELECT * FROM arqueos_caja WHERE id = ?').get(payload.id);
     },
     // ===================== PROVEEDORES & REÓRDENES =====================
-    getProveedores() {
+    getProveedores(negocioId) {
         const db = (0, database_1.getDatabase)();
+        if (negocioId) {
+            return db.prepare('SELECT * FROM proveedores WHERE negocio_id = ? ORDER BY nombre ASC').all(negocioId);
+        }
         return db.prepare('SELECT * FROM proveedores ORDER BY nombre ASC').all();
     },
     saveProveedor(prov) {
         const db = (0, database_1.getDatabase)();
         const id = prov.id || genId('prov-');
-        const negId = prov.negocio_id || 'negocio-local-principal';
+        const negId = ensureNegocioExists(db, prov.negocio_id);
         db.prepare(`
       INSERT INTO proveedores (id, negocio_id, nombre, asesor, telefono, email, dias_visita, notas)
       VALUES (@id, @negocio_id, @nombre, @asesor, @telefono, @email, @dias_visita, @notas)
@@ -256,19 +328,22 @@ exports.dbRepositories = {
         return db.prepare('DELETE FROM proveedores WHERE id = ?').run(id);
     },
     // ===================== AUDITORÍA FÍSICA =====================
-    getSesionesAuditoria() {
+    getSesionesAuditoria(negocioId) {
         const db = (0, database_1.getDatabase)();
+        if (negocioId) {
+            return db.prepare('SELECT * FROM sesiones_auditoria WHERE negocio_id = ? ORDER BY creado_en DESC').all(negocioId);
+        }
         return db.prepare('SELECT * FROM sesiones_auditoria ORDER BY creado_en DESC').all();
     },
     createSesionAuditoria(sesion) {
         const db = (0, database_1.getDatabase)();
         const id = sesion.id || genId('aud-');
-        const negId = sesion.negocio_id || 'negocio-local-principal';
+        const negId = ensureNegocioExists(db, sesion.negocio_id);
         db.prepare(`
       INSERT INTO sesiones_auditoria (
         id, negocio_id, nombre, responsable, alcance, filtro_valor, ocultar_teorico, estado, diferencia_total
       ) VALUES (?, ?, ?, ?, ?, ?, ?, 'en_proceso', 0)
-    `).run(id, negId, sesion.nombre, sesion.responsable, sesion.alcance, sesion.filtro_valor || null, sesion.ocultar_teorico ? 1 : 0);
+    `).run(id, negId, sesion.nombre || 'Auditoría Física', sesion.responsable || 'Administrador', sesion.alcance || 'todo', sesion.filtro_valor || null, sesion.ocultar_teorico ? 1 : 0);
         return db.prepare('SELECT * FROM sesiones_auditoria WHERE id = ?').get(id);
     },
     saveDetallesAuditoria(sesionId, items) {
@@ -302,14 +377,17 @@ exports.dbRepositories = {
     `).all(sesionId);
     },
     // ===================== CLIENTES =====================
-    getClientes() {
+    getClientes(negocioId) {
         const db = (0, database_1.getDatabase)();
+        if (negocioId) {
+            return db.prepare('SELECT * FROM clientes WHERE negocio_id = ? ORDER BY nombre ASC').all(negocioId);
+        }
         return db.prepare('SELECT * FROM clientes ORDER BY nombre ASC').all();
     },
     saveCliente(cliente) {
         const db = (0, database_1.getDatabase)();
         const id = cliente.id || genId('cli-');
-        const negId = cliente.negocio_id || 'negocio-local-principal';
+        const negId = ensureNegocioExists(db, cliente.negocio_id);
         db.prepare(`
       INSERT INTO clientes (id, negocio_id, nombre, documento, telefono, email, direccion, puntos, notas)
       VALUES (@id, @negocio_id, @nombre, @documento, @telefono, @email, @direccion, @puntos, @notas)
@@ -335,13 +413,14 @@ exports.dbRepositories = {
         return db.prepare('SELECT * FROM clientes WHERE id = ?').get(id);
     },
     // ===================== CONFIGURACIÓN & NEGOCIO =====================
-    getConfiguracion(negocioId = 'negocio-local-principal') {
+    getConfiguracion(negocioId) {
         const db = (0, database_1.getDatabase)();
-        return db.prepare('SELECT * FROM configuracion_negocio WHERE negocio_id = ?').get(negocioId);
+        const negId = ensureNegocioExists(db, negocioId);
+        return db.prepare('SELECT * FROM configuracion_negocio WHERE negocio_id = ?').get(negId);
     },
     saveConfiguracion(cfg) {
         const db = (0, database_1.getDatabase)();
-        const negId = cfg.negocio_id || 'negocio-local-principal';
+        const negId = ensureNegocioExists(db, cfg.negocio_id);
         db.prepare(`
       UPDATE configuracion_negocio SET
         moneda = @moneda,

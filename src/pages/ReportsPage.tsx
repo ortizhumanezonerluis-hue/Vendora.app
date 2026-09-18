@@ -13,6 +13,7 @@ import {
   Calendar as CalendarIcon, Users, Download, ArrowUpRight, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { useAuth } from '../components/auth/AuthContext'
+import { offlineDb } from '../lib/offlineDb'
 
 interface ReportSale {
   id: string
@@ -55,6 +56,29 @@ export default function ReportsPage() {
       if (!profile) return
       setLoading(true)
       try {
+        if (!navigator.onLine) {
+          const queued = await offlineDb.getQueuedSales()
+          const mapped: ReportSale[] = queued.map(q => ({
+            id: q.id,
+            total: q.saleData.total,
+            metodo_pago: q.saleData.metodo_pago,
+            cajero: q.saleData.usuario_id || 'Cajero',
+            usuario_id: q.saleData.usuario_id || 'Cajero',
+            fecha: q.timestamp,
+            detalles_venta: q.items.map(it => ({
+              cantidad: it.qty,
+              precio_unitario: it.product.precio_venta,
+              productos: {
+                nombre: it.product.nombre,
+                precio_costo: it.product.precio_costo || 0
+              }
+            }))
+          }))
+          setSales(mapped)
+          setUsersList([{ nombre: profile.nombre || 'Administrador' }])
+          return
+        }
+
         let salesQuery = supabase
           .from('ventas')
           .select(`
@@ -89,8 +113,25 @@ export default function ReportsPage() {
         const { data: usersData } = await usersQuery
         setUsersList(usersData || [])
       } catch (err: any) {
-        console.error('Error cargando reportes:', err)
-        setError(err.message || 'Error al conectar con la base de datos')
+        console.warn('Error cargando reportes:', err)
+        const queued = await offlineDb.getQueuedSales()
+        const mapped: ReportSale[] = queued.map(q => ({
+          id: q.id,
+          total: q.saleData.total,
+          metodo_pago: q.saleData.metodo_pago,
+          cajero: q.saleData.usuario_id || 'Cajero',
+          usuario_id: q.saleData.usuario_id || 'Cajero',
+          fecha: q.timestamp,
+          detalles_venta: q.items.map(it => ({
+            cantidad: it.qty,
+            precio_unitario: it.product.precio_venta,
+            productos: {
+              nombre: it.product.nombre,
+              precio_costo: it.product.precio_costo || 0
+            }
+          }))
+        }))
+        setSales(mapped)
       } finally {
         setLoading(false)
       }

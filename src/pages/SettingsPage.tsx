@@ -10,6 +10,7 @@ import { Store, Users, Bell, Shield, ChevronRight, Loader2, Plus, X, Scale } fro
 import { useAuth } from '../components/auth/AuthContext'
 import { useLicense } from '../hooks/useLicense'
 import { Lock, Sparkles, MessageCircle } from 'lucide-react'
+import { isElectron } from '../lib/electronBridge'
 
 interface SupabaseUser {
   id: string
@@ -60,9 +61,9 @@ export default function SettingsPage() {
   const [addUserError, setAddUserError] = useState<string | null>(null)
 
   // Loading state for store config
-  const isInitialLoading = !storeName && !storeAddress && !rfc
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
 
-  // Load store settings — use maybeSingle so no error if empty
+  // Load store settings
   useEffect(() => {
     async function loadSettings() {
       if (!profile) return
@@ -95,6 +96,8 @@ export default function SettingsPage() {
         }
       } catch (err) {
         console.warn('No se pudo cargar la configuración del negocio:', err)
+      } finally {
+        setIsInitialLoading(false)
       }
     }
     loadSettings()
@@ -124,6 +127,15 @@ export default function SettingsPage() {
       setUsersList(data || [])
     } catch (err: any) {
       console.error('Error cargando usuarios:', err)
+      setUsersList([
+        {
+          id: profile.id || 'usr-admin',
+          nombre: profile.nombre || 'Administrador',
+          email: profile.email || '',
+          rol: profile.rol || 'admin',
+          estado: 'activo'
+        }
+      ])
     } finally {
       setUsersLoading(false)
     }
@@ -133,6 +145,9 @@ export default function SettingsPage() {
     if (!profile) return
     setStoreSaving(true)
     try {
+      localStorage.setItem('vendora_habilitar_granel', String(habilitarGranel))
+      localStorage.setItem('vendora_unidad_granel_defecto', unidadDefecto)
+
       const payload: any = {
         nombre: storeName,
         direccion: storeAddress,
@@ -158,8 +173,6 @@ export default function SettingsPage() {
         if (error) throw error
         if (data) setConfigId(data.id)
       }
-      localStorage.setItem('vendora_habilitar_granel', String(habilitarGranel))
-      localStorage.setItem('vendora_unidad_granel_defecto', unidadDefecto)
       toast('Configuración guardada correctamente', { type: 'success' })
     } catch (err: any) {
       toast('Error al guardar configuración', { type: 'error', description: err.message })

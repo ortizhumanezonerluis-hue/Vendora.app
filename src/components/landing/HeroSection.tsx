@@ -1,8 +1,14 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, MessageCircle, ShieldCheck, Zap, Sparkles, CheckCircle2, MapPin } from 'lucide-react'
+import { ArrowRight, MessageCircle, ShieldCheck, Zap, Sparkles, CheckCircle2, MapPin, Download, Laptop } from 'lucide-react'
 import PosPreviewMockup from './PosPreviewMockup'
 
-export default function HeroSection({ onOpenDemoModal }: { onOpenDemoModal: () => void }) {
+export default function HeroSection({
+  onOpenDemoModal,
+  onOpenDownloadModal
+}: {
+  onOpenDemoModal: () => void
+  onOpenDownloadModal: () => void
+}) {
   const whatsappUrl = "https://wa.me/573009797523?text=" + encodeURIComponent("¡Hola! Me interesa conocer más sobre Vendora para mi negocio y agendar una demostración.")
 
   return (
@@ -34,23 +40,31 @@ export default function HeroSection({ onOpenDemoModal }: { onOpenDemoModal: () =
         </p>
 
         {/* CTA Buttons Group */}
-        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-md mx-auto">
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-2xl mx-auto">
+          <button
+            onClick={onOpenDownloadModal}
+            className="w-full sm:w-auto px-7 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[14px] rounded-xl shadow-lg shadow-blue-600/25 transition-all hover:translate-y-[-2px] flex items-center justify-center gap-2.5 cursor-pointer"
+          >
+            <Download size={18} />
+            <span>Descargar para PC (Windows)</span>
+          </button>
+
           <button
             onClick={onOpenDemoModal}
-            className="w-full sm:w-auto px-7 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[14px] rounded-xl shadow-lg shadow-blue-600/25 transition-all hover:translate-y-[-2px] flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-6 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-[14px] rounded-xl shadow-xs transition-all hover:translate-y-[-1px] flex items-center justify-center gap-2 cursor-pointer"
           >
             <span>Ver Demo en Vivo</span>
-            <ArrowRight size={16} />
+            <ArrowRight size={15} />
           </button>
 
           <a
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full sm:w-auto px-6 py-3.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-[14px] rounded-xl shadow-xs transition-all flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-5 py-3.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-[14px] rounded-xl shadow-xs transition-all flex items-center justify-center gap-2"
           >
             <MessageCircle size={17} className="text-emerald-600" />
-            <span>Escríbenos por WhatsApp</span>
+            <span>WhatsApp</span>
           </a>
         </div>
 

@@ -5,10 +5,11 @@ import { accountingService, LibroFiscalItem } from '../../services/accountingSer
 import { formatCOP } from '../../lib/utils'
 import { toast } from '../../components/ui/Toaster'
 import { SkeletonPage } from '../../components/ui/Skeleton'
+import { printHtmlDocument, downloadHtmlDocument } from '../../lib/printHelper'
 import {
   BookOpen, Plus, Search, Download, Printer, Filter,
   ArrowUpRight, ArrowDownLeft, Edit2, Trash2, Calendar as CalendarIcon,
-  ChevronLeft, ChevronRight, X, Save, FileSpreadsheet, Check, HelpCircle
+  ChevronLeft, ChevronRight, X, Save, FileSpreadsheet, Check, HelpCircle, Lock
 } from 'lucide-react'
 
 type DateFilterType = 'mes' | '30dias' | 'todos' | 'personalizado'
@@ -228,6 +229,11 @@ export default function LibroFiscalPage() {
       }
 
       if (editingItem) {
+        if (editingItem.origen !== 'manual' || editingItem.id.startsWith('pos-') || editingItem.id.startsWith('oc-')) {
+          toast('Los asientos automáticos del POS o Compras no se pueden modificar directamente aquí.', { type: 'info' })
+          setModalOpen(false)
+          return
+        }
         await accountingService.updateLibroFiscalItem(editingItem.id, payload)
         setItems(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...payload } : i))
         toast('Registro fiscal actualizado', { type: 'success' })
@@ -245,6 +251,10 @@ export default function LibroFiscalPage() {
   }
 
   const handleDeleteItem = async (id: string) => {
+    if (id.startsWith('pos-') || id.startsWith('oc-')) {
+      toast('Los asientos automáticos del POS o Compras no se pueden eliminar manualmente.', { type: 'info' })
+      return
+    }
     if (!window.confirm('¿Seguro que deseas eliminar este asiento del Libro Fiscal?')) return
     try {
       await accountingService.deleteLibroFiscalItem(id)
@@ -304,28 +314,7 @@ export default function LibroFiscalPage() {
       </tr>
     `).join('')
 
-    const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <title>Libro Fiscal de Registro de Operaciones Diarias</title>
-  <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #111827; padding: 30px; }
-    .header { text-align:center; margin-bottom: 20px; border-bottom: 2px solid #111827; padding-bottom: 12px; }
-    h1 { font-size: 18px; font-weight: 800; text-transform: uppercase; }
-    p { font-size: 11px; color: #4b5563; margin-top: 2px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
-    th { background: #111827; color: #fff; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
-    th:nth-child(4), th:nth-child(5) { text-align: right; }
-    .summary { margin-top: 20px; border-top: 2px solid #111827; padding-top: 10px; display: flex; justify-content: flex-end; }
-    .summary-box { width: 320px; }
-    .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
-    .total-row { font-weight: 800; font-size: 14px; border-top: 1px solid #ccc; padding-top: 6px; }
-    @media print { body { padding: 15mm; } }
-  </style>
-</head>
-<body>
+    const bodyHtml = `
   <div class="header">
     <h1>LIBRO FISCAL DE REGISTRO DE OPERACIONES DIARIAS</h1>
     <p>Obligación Tributaria para No Responsables de IVA (Art. 616-8 del Estatuto Tributario)</p>
@@ -362,17 +351,24 @@ export default function LibroFiscalPage() {
         <span>${formatCOP(totals.saldoNeto)}</span>
       </div>
     </div>
-  </div>
+  </div>`
 
-  <script>window.onload=function(){setTimeout(function(){window.print();},300);};</script>
-</body>
-</html>`
+    const styles = `
+      body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #111827; padding: 30px; }
+      .header { text-align:center; margin-bottom: 20px; border-bottom: 2px solid #111827; padding-bottom: 12px; }
+      h1 { font-size: 18px; font-weight: 800; text-transform: uppercase; }
+      p { font-size: 11px; color: #4b5563; margin-top: 2px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
+      th { background: #111827; color: #fff; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; }
+      th:nth-child(4), th:nth-child(5) { text-align: right; }
+      .summary { margin-top: 20px; border-top: 2px solid #111827; padding-top: 10px; display: flex; justify-content: flex-end; }
+      .summary-box { width: 320px; }
+      .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+      .total-row { font-weight: 800; font-size: 14px; border-top: 1px solid #ccc; padding-top: 6px; }
+      @media print { body { padding: 10mm; } }
+    `
 
-    const w = window.open('', '_blank', 'width=900,height=750')
-    if (w) {
-      w.document.write(html)
-      w.document.close()
-    }
+    printHtmlDocument('Libro Fiscal de Registro de Operaciones Diarias', bodyHtml, styles)
   }
 
   if (loading) {
@@ -673,24 +669,32 @@ export default function LibroFiscalPage() {
                           {item.valor_egreso > 0 ? formatCOP(item.valor_egreso) : '—'}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => openEditModal(item)}
-                              className="p-1 hover:bg-gray-100 text-gray-500 hover:text-gray-800 rounded transition-colors"
-                              title="Editar Asiento"
-                            >
-                              <Edit2 size={12} />
-                            </button>
-                            {item.origen === 'manual' && (
+                          {item.origen === 'manual' ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => openEditModal(item)}
+                                className="p-1 hover:bg-gray-100 text-gray-500 hover:text-gray-800 rounded transition-colors"
+                                title="Editar Asiento Manual"
+                              >
+                                <Edit2 size={12} />
+                              </button>
                               <button
                                 onClick={() => handleDeleteItem(item.id)}
                                 className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded transition-colors"
-                                title="Eliminar Asiento"
+                                title="Eliminar Asiento Manual"
                               >
                                 <Trash2 size={12} />
                               </button>
-                            )}
-                          </div>
+                            </div>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] text-gray-400 font-medium px-2 py-0.5 rounded bg-gray-50 border border-gray-100 cursor-default"
+                              title={item.origen === 'pos' ? 'Venta registrada desde el POS (Automática, no editable)' : 'Compra registrada desde Órdenes (Automática, no editable)'}
+                            >
+                              <Lock size={10} className="text-gray-400 shrink-0" />
+                              <span>{item.origen === 'pos' ? 'POS' : 'Compra'}</span>
+                            </span>
+                          )}
                         </td>
                       </tr>
                     )

@@ -114,7 +114,7 @@ export default function InventoryPage() {
   })
 
   // 2. Mobile Scanner Sync
-  useRemoteScanner(profile?.negocio_id, profile?.id, async (code, mode) => {
+  useRemoteScanner(profile?.negocio_id || undefined, profile?.id, async (code, mode) => {
     if (mode === 'form') {
       handleBarcodeScan(code)
     }
@@ -207,7 +207,7 @@ export default function InventoryPage() {
     productos.filter((p) => {
       const matchSearch = search === '' ||
         p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        p.codigo_barras.includes(search) ||
+        (p.codigo_barras && p.codigo_barras.includes(search)) ||
         p.categoria.toLowerCase().includes(search.toLowerCase())
       
       const matchSupplier = selectedSupplierFilter === 'all' || p.proveedor_id === selectedSupplierFilter
@@ -663,7 +663,7 @@ export default function InventoryPage() {
                                 'font-mono text-[13px] font-semibold',
                                 mov.cantidad > 0 ? 'text-green-600' : 'text-red-600'
                               ].join(' ')}>
-                                {mov.cantidad > 0 ? '+' : ''}{mov.cantidad}
+                                {mov.cantidad > 0 ? '+' : ''}{Number(Number(mov.cantidad).toFixed(3)).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 text-[12px] text-gray-600">{mov.motivo}</td>

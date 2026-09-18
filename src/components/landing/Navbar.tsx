@@ -1,8 +1,14 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Store, Menu, X, Sparkles } from 'lucide-react'
+import { Store, Menu, X, Sparkles, Download, Laptop } from 'lucide-react'
 
-export default function Navbar({ onOpenDemoModal }: { onOpenDemoModal: () => void }) {
+export default function Navbar({
+  onOpenDemoModal,
+  onOpenDownloadModal
+}: {
+  onOpenDemoModal: () => void
+  onOpenDownloadModal: () => void
+}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const scrollTo = (id: string) => {
@@ -25,34 +31,46 @@ export default function Navbar({ onOpenDemoModal }: { onOpenDemoModal: () => voi
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center gap-8 text-[13px] font-medium text-slate-600">
-          <button onClick={() => scrollTo('beneficios')} className="hover:text-blue-600 transition-colors">
+          <button onClick={() => scrollTo('beneficios')} className="hover:text-blue-600 transition-colors cursor-pointer">
             Beneficios
           </button>
-          <button onClick={() => scrollTo('contabilidad')} className="hover:text-blue-600 transition-colors flex items-center gap-1.5">
+          <button onClick={() => scrollTo('contabilidad')} className="hover:text-blue-600 transition-colors flex items-center gap-1.5 cursor-pointer">
             <Sparkles size={13} className="text-emerald-600" />
             <span>Módulo Inteligente</span>
           </button>
-          <button onClick={() => scrollTo('precios')} className="hover:text-blue-600 transition-colors">
+          <button onClick={() => scrollTo('descargar')} className="hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer">
+            <Laptop size={13} className="text-blue-600" />
+            <span>App Desktop</span>
+          </button>
+          <button onClick={() => scrollTo('precios')} className="hover:text-blue-600 transition-colors cursor-pointer">
             Planes y Financiación
           </button>
-          <button onClick={() => scrollTo('preguntas')} className="hover:text-blue-600 transition-colors">
+          <button onClick={() => scrollTo('preguntas')} className="hover:text-blue-600 transition-colors cursor-pointer">
             Preguntas Frecuentes
           </button>
         </nav>
 
         {/* Right CTA Actions */}
         <div className="hidden sm:flex items-center gap-3">
+          <button
+            onClick={onOpenDownloadModal}
+            className="px-3 py-1.5 text-[12px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100/80 border border-blue-200/60 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Descargar versión para Windows"
+          >
+            <Download size={13} />
+            <span>Descargar PC</span>
+          </button>
           <Link
             to="/login"
             className="px-3 py-1.5 text-[12px] font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100/80 rounded-lg transition-colors"
           >
-            Acceder a la App
+            Acceder Web
           </Link>
           <button
             onClick={onOpenDemoModal}
-            className="px-3.5 py-1.5 text-[12px] font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm shadow-blue-500/20 transition-all hover:translate-y-[-1px]"
+            className="px-3.5 py-1.5 text-[12px] font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm shadow-blue-500/20 transition-all hover:translate-y-[-1px] cursor-pointer"
           >
-            Agendar Demo Gratis
+            Agendar Demo
           </button>
         </div>
 
@@ -96,11 +114,18 @@ export default function Navbar({ onOpenDemoModal }: { onOpenDemoModal: () => voi
           </button>
 
           <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
+            <button
+              onClick={() => { setMobileMenuOpen(false); onOpenDownloadModal(); }}
+              className="w-full text-center py-2.5 text-[12px] font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-center gap-2"
+            >
+              <Download size={14} />
+              <span>Descargar App para PC (.exe)</span>
+            </button>
             <Link
               to="/login"
               className="w-full text-center py-2 text-[12px] font-semibold text-slate-700 bg-slate-100 rounded-lg"
             >
-              Iniciar Sesión en Vendora
+              Iniciar Sesión en Vendora Web
             </Link>
             <button
               onClick={() => { setMobileMenuOpen(false); onOpenDemoModal(); }}

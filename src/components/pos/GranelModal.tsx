@@ -45,11 +45,12 @@ export default function GranelModal({
 
     if (mode === 'dinero') {
       const dinero = parseFloat(dineroInput) || 0
-      const peso = dinero / precioUnitario
+      const rawPeso = dinero / precioUnitario
+      const peso = Number(rawPeso.toFixed(3))
       return { cantidadFinal: peso, totalFinal: dinero }
     } else {
-      const peso = parseFloat(pesoInput) || 0
-      const dinero = peso * precioUnitario
+      const peso = Number((parseFloat(pesoInput) || 0).toFixed(3))
+      const dinero = Math.round(peso * precioUnitario)
       return { cantidadFinal: peso, totalFinal: dinero }
     }
   }, [mode, dineroInput, pesoInput, precioUnitario, producto])
@@ -85,14 +86,15 @@ export default function GranelModal({
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
-    if (cantidadFinal <= 0) return
+    const cleanQty = Number(cantidadFinal.toFixed(3))
+    if (cleanQty <= 0) return
 
     // If over-stock and not authorized, prevent accidental submission
     if (isOverStock && !allowOverstock) {
       return
     }
 
-    onAddToCart(producto, cantidadFinal, allowOverstock)
+    onAddToCart(producto, cleanQty, allowOverstock)
     onClose()
   }
 
