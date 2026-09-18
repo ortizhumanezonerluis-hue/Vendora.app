@@ -8,6 +8,8 @@ directories:
   buildResources: build-resources
 
 # Archivos a incluir en el paquete Electron
+npmRebuild: false
+asar: true
 files:
   - dist/**
   - dist-electron/**
