@@ -1,6 +1,7 @@
 appId: com.vendora.pos
 productName: Vendora POS
 copyright: Copyright © 2025 Vendora
+compression: store
 
 # Directorios de artefactos
 directories:
@@ -9,11 +10,17 @@ directories:
 
 # Archivos a incluir en el paquete Electron
 npmRebuild: false
+nodeGypRebuild: false
 asar: true
 files:
   - dist/**
   - dist-electron/**
   - package.json
+  - "!node_modules"
+  - "!node_modules/**"
+  - "!src/**"
+  - "!public/**"
+  - "!scripts/**"
 
 # Configuración Windows — NSIS installer
 win:
