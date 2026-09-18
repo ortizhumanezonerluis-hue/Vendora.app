@@ -12,7 +12,8 @@ if (!fs.existsSync(distElectronDir)) {
 }
 fs.writeFileSync(path.join(distElectronDir, 'package.json'), JSON.stringify({ type: 'commonjs' }, null, 2))
 
-console.log('3. Compilando interfaz React con Vite...')
-execSync('npx vite build', { stdio: 'inherit' })
+console.log('3. Compilando interfaz React con Vite para Electron...')
+process.env.ELECTRON_BUILD = 'true'
+execSync('npx vite build', { stdio: 'inherit', env: { ...process.env, ELECTRON_BUILD: 'true' } })
 
 console.log('✓ Compilación completada con éxito.')

@@ -308,14 +308,15 @@ export const adminService = {
   }> {
     try {
       if (email) {
+        const cleanEmail = email.trim().toLowerCase()
         const { data } = await supabase
           .from('vendora_clientes')
           .select('*')
-          .eq('email_acceso', email)
+          .ilike('email_acceso', cleanEmail)
           .maybeSingle()
         if (data) {
           return {
-            plan: (data.plan as PlanType) || 'sin_licencia',
+            plan: (data.plan as PlanType) || 'max',
             licenciaActiva: Boolean(data.licencia_activa && data.estado === 'activo'),
             cliente: data
           }
@@ -330,7 +331,7 @@ export const adminService = {
           .maybeSingle()
         if (data) {
           return {
-            plan: (data.plan as PlanType) || 'sin_licencia',
+            plan: (data.plan as PlanType) || 'max',
             licenciaActiva: Boolean(data.licencia_activa && data.estado === 'activo'),
             cliente: data
           }
@@ -340,10 +341,11 @@ export const adminService = {
 
     // Fallback: Check local state
     if (email) {
-      const local = localClientesState.find(c => c.email_acceso === email)
+      const cleanEmail = email.trim().toLowerCase()
+      const local = localClientesState.find(c => c.email_acceso?.trim().toLowerCase() === cleanEmail)
       if (local) {
         return {
-          plan: local.plan,
+          plan: local.plan || 'max',
           licenciaActiva: Boolean(local.licencia_activa && local.estado === 'activo'),
           cliente: local
         }
@@ -351,7 +353,7 @@ export const adminService = {
     }
 
     return {
-      plan: 'pro',
+      plan: 'max',
       licenciaActiva: true,
       cliente: null
     }

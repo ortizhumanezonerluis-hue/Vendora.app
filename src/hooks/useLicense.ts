@@ -41,7 +41,7 @@ export function useLicense(): LicensePermissions {
   const email = profile?.email || user?.email
 
   // 1. Initial State from Cache (Synchronous to avoid flickering)
-  const cachedPlan = (localStorage.getItem('vendora_cached_plan') as PlanType) || 'pro'
+  const cachedPlan = (localStorage.getItem('vendora_cached_plan') as PlanType) || 'max'
   const cachedActiveStr = localStorage.getItem('vendora_cached_licencia')
   const cachedLockReason = (localStorage.getItem('vendora_cached_lock_reason') as LockReason) || 'none'
   const cachedFechaCorte = localStorage.getItem('vendora_cached_fecha_corte') || undefined
