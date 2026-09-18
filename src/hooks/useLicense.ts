@@ -24,11 +24,6 @@ export interface LicensePermissions {
   diasRestantes?: number
 }
 
-// Días de gracia permitidos después de la fecha de corte antes de bloquear en offline
-const OFFLINE_GRACE_DAYS = 3
-// Máximo de días consecutivos que la app puede operar offline sin conectarse a validar licencia
-const MAX_OFFLINE_DAYS = 15
-
 function computeDaysDiff(targetDateStr?: string): number {
   if (!targetDateStr) return 999
   const target = new Date(targetDateStr).getTime()
@@ -40,37 +35,20 @@ export function useLicense(): LicensePermissions {
   const { profile, user } = useAuth()
   const email = profile?.email || user?.email
 
-  // 1. Initial State from Cache (Synchronous to avoid flickering)
+  // 1. Initial State from Cache (Synchronous to eliminate flashing/loading delay)
   const cachedPlan = (localStorage.getItem('vendora_cached_plan') as PlanType) || 'max'
   const cachedActiveStr = localStorage.getItem('vendora_cached_licencia')
   const cachedLockReason = (localStorage.getItem('vendora_cached_lock_reason') as LockReason) || 'none'
   const cachedFechaCorte = localStorage.getItem('vendora_cached_fecha_corte') || undefined
-  const cachedLastOnline = localStorage.getItem('vendora_cached_last_online')
   const cachedEstado = localStorage.getItem('vendora_cached_estado')
 
   let initialActive = cachedActiveStr !== 'false'
   let initialLockReason: LockReason = cachedLockReason
 
-  // If cached as suspended/mora/inactivo, immediately lock
+  // If explicitly cached as suspended or mora, keep locked
   if (cachedActiveStr === 'false' || cachedEstado === 'suspendido' || cachedEstado === 'mora') {
     initialActive = false
     initialLockReason = (cachedEstado === 'mora' ? 'mora' : 'suspended') as LockReason
-  } else if (cachedActiveStr === 'true' && !navigator.onLine) {
-    // Offline Lease Verification: check expiration and grace period
-    if (cachedFechaCorte) {
-      const daysUntilCut = computeDaysDiff(cachedFechaCorte)
-      if (daysUntilCut < -OFFLINE_GRACE_DAYS) {
-        initialActive = false
-        initialLockReason = 'expired_lease'
-      }
-    }
-    if (cachedLastOnline) {
-      const daysSinceOnline = (Date.now() - new Date(cachedLastOnline).getTime()) / (1000 * 60 * 60 * 24)
-      if (daysSinceOnline > MAX_OFFLINE_DAYS) {
-        initialActive = false
-        initialLockReason = 'expired_lease'
-      }
-    }
   }
 
   const [plan, setPlan] = useState<PlanType>(cachedPlan)
@@ -93,35 +71,21 @@ export function useLicense(): LicensePermissions {
     let isMounted = true
 
     async function evaluateLicense() {
-      // Offline Check
+      // Offline Mode: Keep POS and Inventory fully operational using cached plan
       if (!navigator.onLine) {
         const isLocallySuspended =
           localStorage.getItem('vendora_cached_licencia') === 'false' ||
-          localStorage.getItem('vendora_cached_estado') === 'suspendido'
+          localStorage.getItem('vendora_cached_estado') === 'suspendido' ||
+          localStorage.getItem('vendora_cached_estado') === 'mora'
 
-        if (isLocallySuspended) {
-          if (isMounted) {
-            setLicenciaActiva(false)
-            setLockReason('suspended')
-          }
-          return
-        }
-
-        const savedCut = localStorage.getItem('vendora_cached_fecha_corte')
-        if (savedCut) {
-          const days = computeDaysDiff(savedCut)
-          if (days < -OFFLINE_GRACE_DAYS) {
-            if (isMounted) {
-              setLicenciaActiva(false)
-              setLockReason('expired_lease')
-            }
-            return
-          }
+        if (isLocallySuspended && isMounted) {
+          setLicenciaActiva(false)
+          setLockReason(localStorage.getItem('vendora_cached_estado') === 'mora' ? 'mora' : 'suspended')
         }
         return
       }
 
-      // Online Check
+      // Online Check: Supabase is the single source of truth
       if (!email && !profile?.negocio_id) return
 
       try {

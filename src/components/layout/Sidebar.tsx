@@ -26,7 +26,8 @@ import {
   Coins,
   Lock,
   Activity,
-  HardDrive
+  HardDrive,
+  LogOut
 } from 'lucide-react'
 
 // Main App Navigation Items
@@ -61,7 +62,7 @@ type SidebarProps = {
 export default function Sidebar({ collapsed }: SidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { profile } = useAuth()
+  const { profile, signOut } = useAuth()
   const { plan, canAccessPurchasing, canAccessLogs, canAccessAccounting, isSinLicencia } = useLicense()
   const isAdmin = profile?.rol === 'admin'
 
@@ -256,20 +257,31 @@ export default function Sidebar({ collapsed }: SidebarProps) {
             </NavLink>
           )}
 
-          {/* User info */}
+          {/* User info & direct logout */}
           <div className={[
-            'mt-2.5 flex items-center gap-2.5 bg-slate-50 rounded-lg p-2',
+            'mt-2.5 flex items-center justify-between bg-slate-50 rounded-lg p-2',
             collapsed ? 'justify-center p-1.5' : ''
           ].join(' ')}>
-            <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-[10px] font-semibold text-white shrink-0">
-              {initials}
-            </div>
-            {!collapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-semibold text-slate-900 truncate">{profile?.nombre || 'Usuario'}</p>
-                <p className="text-[10px] text-slate-400 truncate capitalize">{profile?.rol === 'admin' ? 'Administrador' : 'Empleado'}</p>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-full bg-slate-900 flex items-center justify-center text-[10px] font-semibold text-white shrink-0">
+                {initials}
               </div>
-            )}
+              {!collapsed && (
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] font-semibold text-slate-900 truncate">{profile?.nombre || 'Usuario'}</p>
+                  <p className="text-[10px] text-slate-400 truncate capitalize">{profile?.rol === 'admin' ? 'Administrador' : 'Empleado'}</p>
+                </div>
+              )}
+            </div>
+            {!collapsed ? (
+              <button
+                onClick={() => signOut()}
+                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer shrink-0 ml-1"
+                title="Cerrar Sesión"
+              >
+                <LogOut size={14} />
+              </button>
+            ) : null}
           </div>
         </div>
       </aside>

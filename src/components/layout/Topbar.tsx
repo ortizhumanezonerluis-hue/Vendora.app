@@ -128,6 +128,8 @@ function ScannerQRModal({ negocioId, onClose }: { negocioId: string; onClose: ()
   )
 }
 
+import { isElectron } from '../../lib/electronBridge'
+
 export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
   const { profile, signOut } = useAuth()
   const [online, setOnline] = useState(navigator.onLine)
@@ -222,9 +224,9 @@ export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
         />
       )}
 
-      <header className="flex items-center justify-between h-14 px-4 border-b border-gray-200 bg-white shrink-0 z-30 select-none">
+      <header className={`flex items-center justify-between h-14 px-4 border-b border-gray-200 bg-white shrink-0 z-30 select-none ${isElectron ? 'pr-36' : ''}`}>
         {/* Left side: sidebar toggle + breadcrumbs */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
           {/* Sidebar Toggle — lives OUTSIDE the sidebar */}
           {onToggleSidebar && (
             <button
@@ -244,7 +246,7 @@ export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
         </div>
 
         {/* Right side controls */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
           {/* Search */}
           <div className="relative">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -253,20 +255,20 @@ export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
               type="text"
               value={searchVal}
               onChange={(e) => setSearchVal(e.target.value)}
-              placeholder="Búsqueda rápida... (Ctrl+K)"
-              className="w-48 h-7 pl-8 pr-3 text-[12px] border border-gray-200 rounded-md bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:bg-white transition-colors"
+              placeholder="Búsqueda... (Ctrl+K)"
+              className="w-40 md:w-48 h-7 pl-8 pr-3 text-[12px] border border-gray-200 rounded-md bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-300 focus:bg-white transition-colors"
             />
           </div>
 
-          {/* Scanner Pairing Button — opens QR modal, visible to all authenticated roles */}
+          {/* Scanner Pairing Button */}
           {profile?.negocio_id && (
             <button
               onClick={() => setShowScannerModal(true)}
               title="Conectar escáner móvil"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-gray-200 text-gray-500 hover:text-gray-800 hover:bg-gray-50 text-[12px] font-medium transition-colors"
+              className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-md border border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 text-[11px] font-medium transition-colors cursor-pointer"
             >
               <Smartphone size={13} />
-              <span>Escáner Móvil</span>
+              <span>Escáner</span>
             </button>
           )}
 
@@ -274,7 +276,7 @@ export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
           <NetworkStatusBadge />
 
           {/* Role Badge */}
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200 capitalize">
+          <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-200 capitalize">
             {profile?.rol === 'admin' ? 'Administrador' : 'Empleado'}
           </span>
 
@@ -282,7 +284,7 @@ export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
           <div className="relative" ref={notificationsRef}>
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="relative p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              className="relative p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
             >
               <Bell size={15} />
               {alerts.length > 0 && (
@@ -295,7 +297,7 @@ export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
                 <div className="px-4 py-2 border-b border-gray-100 flex items-center justify-between">
                   <span className="text-[12px] font-semibold text-gray-900">Notificaciones</span>
                   {alerts.length > 0 && (
-                    <button onClick={() => setAlerts([])} className="text-[10px] text-gray-400 hover:text-gray-600">Limpiar</button>
+                    <button onClick={() => setAlerts([])} className="text-[10px] text-gray-400 hover:text-gray-600 cursor-pointer">Limpiar</button>
                   )}
                 </div>
                 <div className="divide-y divide-gray-50 max-h-60 overflow-y-auto">
@@ -323,6 +325,7 @@ export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
             <button
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="w-7 h-7 rounded-full bg-gray-900 hover:bg-gray-800 text-white flex items-center justify-center text-[11px] font-semibold cursor-pointer transition-colors shadow-sm"
+              title={profile?.nombre || 'Usuario'}
             >
               {initials}
             </button>
@@ -339,7 +342,7 @@ export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
                     setShowProfileMenu(false)
                     signOut()
                   }}
-                  className="w-full text-left px-4 py-2 text-[12px] text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium"
+                  className="w-full text-left px-4 py-2 text-[12px] text-red-600 hover:bg-red-50 flex items-center gap-2 font-medium cursor-pointer"
                 >
                   <LogOut size={13} />
                   Cerrar Sesión
