@@ -28,16 +28,16 @@ export default function SmartReorderPanel() {
   const [observations, setObservations] = useState('')
 
   useEffect(() => {
-    loadEngineData()
-  }, [profile])
+    loadEngineData(coverageDays)
+  }, [profile, coverageDays])
 
-  const loadEngineData = async () => {
+  const loadEngineData = async (days = coverageDays) => {
     if (!profile?.negocio_id) return
     setLoading(true)
     try {
       const sups = await reorderService.getProveedores(profile.negocio_id)
       setSuppliers(sups)
-      const data = await reorderService.calculateReorderSugerencias(profile.negocio_id)
+      const data = await reorderService.calculateReorderSugerencias(profile.negocio_id, days)
       setSugerencias(data)
     } catch (err: any) {
       toast(err.message || 'Error calculando sugerencias', { type: 'error' })
@@ -108,7 +108,7 @@ export default function SmartReorderPanel() {
         })
         return next
       })
-      loadEngineData()
+      loadEngineData(coverageDays)
     } catch (err: any) {
       toast(err.message || 'Error al generar la orden', { type: 'error' })
     } finally {

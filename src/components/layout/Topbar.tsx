@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Search, Bell, LogOut, Smartphone, Copy, Check, X, ExternalLink, PanelLeft } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import NetworkStatusBadge from '../offline/NetworkStatusBadge'
+import { isElectron } from '../../lib/electronBridge'
 
 type TopbarProps = {
   title: string
@@ -17,9 +18,15 @@ interface NotificationAlert {
   fecha: string
 }
 
+// The deployed web app base URL — used for QR generation in Electron so mobile devices
+// can reach the public /scanner-app route (not file://)
+const WEB_BASE_URL = import.meta.env.VITE_WEB_BASE_URL || 'https://vendora.app'
+
 /** Modal that shows a QR code for pairing the mobile scanner without login */
 function ScannerQRModal({ negocioId, onClose }: { negocioId: string; onClose: () => void }) {
-  const scannerUrl = `${window.location.origin}/scanner-app?negocio_id=${negocioId}`
+  // In Electron the origin is file:// which is unreachable from mobile — use the web app URL
+  const origin = isElectron ? WEB_BASE_URL : window.location.origin
+  const scannerUrl = `${origin}/scanner-app?negocio_id=${negocioId}`
   const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(scannerUrl)}&margin=10&color=111827&bgcolor=ffffff`
   const [copied, setCopied] = useState(false)
 
@@ -128,7 +135,7 @@ function ScannerQRModal({ negocioId, onClose }: { negocioId: string; onClose: ()
   )
 }
 
-import { isElectron } from '../../lib/electronBridge'
+
 
 export default function Topbar({ title, onToggleSidebar }: TopbarProps) {
   const { profile, signOut } = useAuth()

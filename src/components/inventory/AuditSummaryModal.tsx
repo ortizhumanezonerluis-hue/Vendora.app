@@ -15,10 +15,13 @@ interface AuditSummaryModalProps {
 export default function AuditSummaryModal({ session, countedItems, onClose, onApproved, isAdmin }: AuditSummaryModalProps) {
   const [loading, setLoading] = useState(false)
 
+  // Helper: round to at most 4 significant decimal places (avoids float noise like -67.9999978)
+  const round = (n: number) => Math.round(n * 10000) / 10000
+
   // 1. Calculations
   const processedItems = countedItems.map(item => {
-    const diff = item.cantidad_contada - item.stock_sistema
-    const impact = diff * item.costo_unitario
+    const diff = round(item.cantidad_contada - item.stock_sistema)
+    const impact = round(diff * item.costo_unitario)
     return {
       ...item,
       diff,
@@ -27,8 +30,8 @@ export default function AuditSummaryModal({ session, countedItems, onClose, onAp
   })
 
   const matchingCount = processedItems.filter(it => it.diff === 0).length
-  const missingCount = processedItems.filter(it => it.diff < 0).reduce((acc, curr) => acc + Math.abs(curr.diff), 0)
-  const surplusCount = processedItems.filter(it => it.diff > 0).reduce((acc, curr) => acc + curr.diff, 0)
+  const missingCount = round(processedItems.filter(it => it.diff < 0).reduce((acc, curr) => acc + Math.abs(curr.diff), 0))
+  const surplusCount = round(processedItems.filter(it => it.diff > 0).reduce((acc, curr) => acc + curr.diff, 0))
   const totalFinancialImpact = processedItems.reduce((acc, curr) => acc + curr.impact, 0)
 
   const handleApprove = async () => {

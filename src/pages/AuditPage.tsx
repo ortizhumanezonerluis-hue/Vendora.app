@@ -109,11 +109,20 @@ export default function AuditPage() {
     loadSessionsData()
   }
 
+
   const handleRetakeSession = async (session: SesionAuditoria) => {
     if (session.estado === 'completada') {
       // Direct load to see historic static summary details
       const details = await auditSessionService.getSessionDetails(session.id!)
-      setCountedDraftItems(details)
+      // Normalize: the modal uses producto_nombre / cantidad_contada / stock_sistema / costo_unitario
+      const normalized = details.map((d: any) => ({
+        ...d,
+        producto_nombre: d.producto_nombre || d.productos?.nombre || 'Producto',
+        cantidad_contada: d.cantidad_contada ?? 0,
+        stock_sistema: d.stock_sistema ?? 0,
+        costo_unitario: d.costo_unitario ?? 0,
+      }))
+      setCountedDraftItems(normalized)
       setActiveSession(session)
       setShowSummary(true)
     } else {

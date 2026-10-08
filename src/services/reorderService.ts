@@ -169,7 +169,7 @@ export const reorderService = {
   },
 
   // --- Smart Reorder Engine Calculation ---
-  async calculateReorderSugerencias(negocioId?: string | null) {
+  async calculateReorderSugerencias(negocioId?: string | null, coverageDays: number = 7) {
     try {
       if (!navigator.onLine) return []
 
@@ -199,6 +199,7 @@ export const reorderService = {
       })
 
       return (products || []).map(p => {
+        const isGranel = p.unidad_medida === 'granel' || p.es_granel === true
         const soldLast14Days = salesVolume[p.id] || 0
         const dailyVelocity = soldLast14Days / 14
         const currentStock = p.stock_actual || 0
@@ -207,9 +208,14 @@ export const reorderService = {
         // Remaining stock days coverage
         const daysRemaining = dailyVelocity > 0 ? (currentStock / dailyVelocity) : 999
 
-        // Suggested reorder (assuming target of 7 days coverage)
-        const targetDays = 7
-        const suggestedAmount = Math.ceil((dailyVelocity * targetDays) - currentStock)
+        // Suggested reorder using the dynamic coverageDays parameter
+        const rawSuggested = (dailyVelocity * coverageDays) - currentStock
+        // For granel products round to 2 decimal places; for unit products round up to whole integer
+        const suggestedAmount = rawSuggested > 0
+          ? (isGranel
+              ? Math.round(rawSuggested * 100) / 100
+              : Math.ceil(rawSuggested))
+          : 0
 
         // Add flags for ordering
         const needsReorder = currentStock <= minStock || daysRemaining <= 3 || (suggestedAmount > 0 && currentStock < minStock * 1.5)
